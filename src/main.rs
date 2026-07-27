@@ -137,11 +137,15 @@ fn library_table_button(torrent: Torrent) -> Element<'static, NyaaMessage> {
 }
 
 fn filter_library_torrents(query: &str, torrents: &[Torrent]) -> Vec<Torrent> {
+    const VIDEO_EXTS: [&str; 5] = [".mkv", ".mp4", ".avi", ".mov", ".webm"];
     let formatted_query = query.to_lowercase().replace(['.', '_', '-'], " ");
 
     torrents
         .iter()
-        .filter(|t| t.name.ends_with(".mkv"))
+        .filter(|t| {
+            let name = t.name.to_lowercase();
+            VIDEO_EXTS.iter().any(|ext| name.ends_with(ext))
+        })
         .filter(|t| t.name.to_lowercase().contains(&formatted_query))
         .cloned()
         .collect()

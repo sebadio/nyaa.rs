@@ -137,7 +137,7 @@ fn library_table_button(torrent: Torrent) -> Element<'static, NyaaMessage> {
 }
 
 fn filter_library_torrents(query: &str, torrents: &[Torrent]) -> Vec<Torrent> {
-    let formatted_query = query.to_lowercase();
+    let formatted_query = query.to_lowercase().replace(['.', '_', '-'], " ");
 
     torrents
         .iter()

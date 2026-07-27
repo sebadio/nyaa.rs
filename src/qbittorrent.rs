@@ -13,6 +13,7 @@ pub struct Torrent {
     pub num_leechs: u32,
     pub num_complete: u32,
     pub num_incomplete: u32,
+    pub added_on: i64,
 }
 
 #[derive(Debug, Clone)]
@@ -60,7 +61,10 @@ impl Client {
 
     pub async fn get_torrents(&self) -> Result<Vec<Torrent>, Error> {
         self.http
-            .get(format!("{}/api/v2/torrents/info", self.base_url))
+            .get(format!(
+                "{}/api/v2/torrents/info?sort=added_on&reverse=true",
+                self.base_url
+            ))
             .send()
             .await
             .map_err(|e| Error::Http(e.to_string()))?

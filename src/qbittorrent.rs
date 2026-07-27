@@ -11,6 +11,8 @@ pub struct Torrent {
     pub state: String,
     pub num_seeds: u32,
     pub num_leechs: u32,
+    pub num_complete: u32,
+    pub num_incomplete: u32,
 }
 
 #[derive(Debug, Clone)]

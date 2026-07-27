@@ -1,5 +1,7 @@
 mod qbittorrent;
 
+use std::format;
+
 use humansize::{DECIMAL, format_size};
 use iced::Length::Fill;
 use iced::widget::{button, column, row, scrollable, space, table, text, text_input};
@@ -151,8 +153,12 @@ fn library_view<'a>(query: &'a str, torrents: Vec<Torrent>) -> Element<'a, NyaaM
         table::column(text("Size"), |t: Torrent| {
             text(format_size(t.size, DECIMAL))
         }),
-        table::column(text("Seeders"), |t: Torrent| text(t.num_seeds)),
-        table::column(text("Leechs"), |t: Torrent| text(t.num_leechs)),
+        table::column(text("Seeders"), |t: Torrent| {
+            text(format!("{} ({})", t.num_seeds, t.num_complete))
+        }),
+        table::column(text("Leechs"), |t: Torrent| {
+            text(format!("{} ({})", t.num_leechs, t.num_incomplete))
+        }),
         table::column(text("Progress"), |t: Torrent| {
             text(format!("{:.0}%", t.progress * 100.0))
         }),

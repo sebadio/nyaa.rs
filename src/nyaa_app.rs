@@ -67,9 +67,9 @@ impl NyaaAppState {
                     return Task::none();
                 };
 
-                return match settings.update(settings_message) {
+                match settings.update(settings_message) {
                     _ => todo!("TODO"),
-                };
+                }
             }
             NyaaMessage::Exit => return iced::exit(),
             NyaaMessage::ToggleWindowMode => {

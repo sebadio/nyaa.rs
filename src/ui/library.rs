@@ -1,8 +1,10 @@
 use crate::qbittorrent::{self, Client, Torrent};
 use chrono::{DateTime, Local, Utc};
 use humansize::{DECIMAL, format_size};
-use iced::Length::Fill;
-use iced::widget::{button, column, row, scrollable, space, table, text, text_input};
+use iced::Length::{Fill, FillPortion};
+use iced::widget::scrollable::Scrollbar;
+use iced::widget::text::Wrapping;
+use iced::widget::{button, column, progress_bar, row, scrollable, space, table, text, text_input};
 use iced::{Element, Font, Task, Theme, font};
 use iced_fonts::lucide::refresh_cw;
 use std::format;
@@ -80,24 +82,32 @@ impl Library {
             table::column(text("Name").font(column_header_font), |t: Torrent| {
                 library_table_button(t)
             })
-            .width(Fill),
+            .width(FillPortion(6)),
             table::column(text("Size").font(column_header_font), |t: Torrent| {
-                text(format_size(t.size, DECIMAL))
-            }),
+                text(format_size(t.size, DECIMAL)).wrapping(Wrapping::None)
+            })
+            .width(FillPortion(1)),
             table::column(text("Seeders").font(column_header_font), |t: Torrent| {
-                text(format!("{} ({})", t.num_seeds, t.num_complete))
-            }),
+                text(format!("{} ({})", t.num_seeds, t.num_complete)).wrapping(Wrapping::None)
+            })
+            .width(FillPortion(1)),
             table::column(text("Leechs").font(column_header_font), |t: Torrent| {
-                text(format!("{} ({})", t.num_leechs, t.num_incomplete))
-            }),
+                text(format!("{} ({})", t.num_leechs, t.num_incomplete)).wrapping(Wrapping::None)
+            })
+            .width(FillPortion(1)),
             table::column(text("Progress").font(column_header_font), |t: Torrent| {
-                text(format!("{:.0}%", t.progress * 100.0))
-            }),
+                column![
+                    progress_bar(0.0..=100.0, t.progress * 100.0),
+                    text(format!("{:.0}%", t.progress * 100.0))
+                ]
+            })
+            .width(FillPortion(1)),
             table::column(text("Added On").font(column_header_font), |t: Torrent| {
                 let dt_utc = DateTime::<Utc>::from_timestamp(t.added_on, 0).unwrap();
                 let dt_local: DateTime<Local> = dt_utc.into();
                 text(format!("{}", dt_local.format("%y-%m-%d %H:%M:%S")))
-            }),
+            })
+            .width(FillPortion(1)),
         ];
 
         const TOOLBAR_HEIGHT: f32 = 40.0;
@@ -124,8 +134,11 @@ impl Library {
             space().height(20),
             row![
                 scrollable(table(columns, filtered_torrents.iter().cloned()))
-                    .spacing(5)
                     .width(Fill)
+                    .height(Fill)
+                    .direction(scrollable::Direction::Vertical(
+                        Scrollbar::new().width(8).scroller_width(8).spacing(5) // ← embeds it: always shown, reserves space, doesn't float
+                    ))
             ]
             .height(Fill)
         ]
@@ -135,7 +148,7 @@ impl Library {
 
 fn library_table_button(torrent: Torrent) -> Element<'static, LibraryMessage> {
     let hash = torrent.hash.clone();
-    button(text(torrent.name))
+    button(text(torrent.name).wrapping(Wrapping::WordOrGlyph))
         .style(|theme: &Theme, status| {
             let palette = theme.extended_palette();
             button::Style {

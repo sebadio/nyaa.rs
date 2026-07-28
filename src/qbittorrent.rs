@@ -7,7 +7,7 @@ pub struct Torrent {
     pub hash: String,
     pub content_path: String,
     pub size: u64,
-    pub progress: f64,
+    pub progress: f32,
     pub state: String,
     pub num_seeds: u32,
     pub num_leechs: u32,

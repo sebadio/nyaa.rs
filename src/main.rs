@@ -10,14 +10,14 @@ fn main() -> iced::Result {
     env_logger::init();
 
     let original_size = Size {
-        width: 1200.0,
+        width: 1280.0,
         height: 700.0,
     };
 
     iced::application(NyaaAppState::new, NyaaAppState::update, NyaaAppState::view)
         .default_font(Font::with_name("Monocraft"))
-        // .decorations(false)
         // .default_font(Font::with_name("Miracode"))
+        // .decorations(false)
         .font(LUCIDE_FONT_BYTES)
         .theme(iced::Theme::Ferra)
         .window(Settings {

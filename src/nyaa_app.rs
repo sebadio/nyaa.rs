@@ -1,5 +1,6 @@
-use crate::qbittorrent;
-use crate::qbittorrent::{Client, Torrent};
+use crate::qbittorrent::Client;
+use crate::ui::settings::{self, Settings};
+use crate::ui::{Library, library};
 use crate::ui::{custom_titlebar, main_view, sidebar};
 use iced::Length::Fill;
 use iced::Subscription;
@@ -12,8 +13,8 @@ use log::{info, warn};
 pub(crate) enum NyaaView {
     #[default]
     NyaaSearch,
-    QtorLibrary,
-    Settings,
+    QtorLibrary(Library),
+    Settings(Settings),
 }
 
 #[derive(Debug, Clone)]
@@ -25,16 +26,12 @@ pub(crate) enum NyaaMessage {
     NavigateToSearch,
     NavigateToLibrary,
     NavigateToSettings,
-    LibraryQueryChanged(String),
-    LoadTorrents,
-    TorrentsLoaded(Result<Vec<Torrent>, qbittorrent::Error>),
-    LibraryTorrentPressed(String),
+    Library(library::LibraryMessage),
+    Settings(settings::SettingsMessage),
 }
 
 pub(crate) struct NyaaAppState {
     pub(crate) current_view: NyaaView,
-    pub(crate) library_query: String,
-    pub(crate) library_torrents: Vec<Torrent>,
     qbt_client: Client,
 }
 
@@ -42,9 +39,7 @@ impl NyaaAppState {
     pub(crate) fn new() -> NyaaAppState {
         NyaaAppState {
             current_view: NyaaView::default(),
-            library_query: String::new(),
             qbt_client: Client::new("http://127.0.0.1:8080").expect("client"),
-            library_torrents: Vec::new(),
         }
     }
 
@@ -60,28 +55,21 @@ impl NyaaAppState {
         match message {
             NyaaMessage::NavigateToSearch => self.current_view = NyaaView::NyaaSearch,
             NyaaMessage::NavigateToLibrary => {
-                self.current_view = NyaaView::QtorLibrary;
-                return Task::done(NyaaMessage::LoadTorrents);
+                self.current_view = NyaaView::QtorLibrary(Library::new());
+                return Task::done(NyaaMessage::Library(library::LibraryMessage::Load));
             }
-            NyaaMessage::NavigateToSettings => self.current_view = NyaaView::Settings,
-            NyaaMessage::LibraryQueryChanged(text) => self.library_query = text,
-            NyaaMessage::LoadTorrents => {
-                let qbt = self.qbt_client.clone();
-                return Task::perform(
-                    async move {
-                        qbt.login("iota", "cacatua123").await?;
-                        qbt.get_torrents().await
-                    },
-                    NyaaMessage::TorrentsLoaded,
-                );
+            NyaaMessage::NavigateToSettings => {
+                self.current_view = NyaaView::Settings(Settings::new());
+                return Task::none();
             }
-            NyaaMessage::TorrentsLoaded(Ok(list)) => self.library_torrents = list,
-            NyaaMessage::TorrentsLoaded(Err(e)) => warn!("qbt error: {e:?}"),
-            NyaaMessage::LibraryTorrentPressed(hash) => {
-                info!("Pressed torrent: {}", hash);
-                if let Some(t) = self.library_torrents.iter().find(|t| t.hash == hash) {
-                    let _ = open::that(&t.content_path);
-                }
+            NyaaMessage::Settings(settings_message) => {
+                let NyaaView::Settings(settings) = &mut self.current_view else {
+                    return Task::none();
+                };
+
+                return match settings.update(settings_message) {
+                    _ => todo!("TODO"),
+                };
             }
             NyaaMessage::Exit => return iced::exit(),
             NyaaMessage::ToggleWindowMode => {
@@ -91,16 +79,28 @@ impl NyaaAppState {
                 return window::latest().and_then(|id| window::minimize(id, true));
             }
             NyaaMessage::Drag => return window::latest().and_then(window::drag),
+            NyaaMessage::Library(library_message) => {
+                let NyaaView::QtorLibrary(library) = &mut self.current_view else {
+                    return Task::none();
+                };
+                return match library.update(library_message, &self.qbt_client) {
+                    library::Action::None => Task::none(),
+                    library::Action::Run(task) => task.map(NyaaMessage::Library),
+                    library::Action::OpenPath(path) => {
+                        let _ = open::that(path);
+                        Task::none()
+                    }
+                };
+            }
         }
 
         Task::none()
     }
 
     pub(crate) fn subscription(&self) -> Subscription<NyaaMessage> {
-        match self.current_view {
-            NyaaView::QtorLibrary => {
-                time::every(Duration::from_secs(1)).map(|_| NyaaMessage::LoadTorrents)
-            }
+        match &self.current_view {
+            NyaaView::QtorLibrary(_) => time::every(Duration::from_secs(1))
+                .map(|_| NyaaMessage::Library(library::LibraryMessage::Load)),
             _ => Subscription::none(),
         }
     }

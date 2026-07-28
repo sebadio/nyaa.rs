@@ -1,7 +1,9 @@
-mod library;
+pub(crate) mod library;
+pub(crate) use library::Library;
+
+pub(crate) mod settings;
 
 use crate::nyaa_app::{NyaaAppState, NyaaMessage, NyaaView};
-use crate::ui::library::library_view;
 use iced::Element;
 use iced::Length::Fill;
 use iced::widget::{button, column, container, mouse_area, row, space, text};
@@ -27,12 +29,14 @@ pub(crate) fn custom_titlebar() -> Element<'static, NyaaMessage> {
 }
 
 pub(crate) fn main_view(app_state: &NyaaAppState) -> Element<'_, NyaaMessage> {
-    match app_state.current_view {
+    match &app_state.current_view {
         NyaaView::NyaaSearch => text("Nyaa let's search!").into(),
-        NyaaView::QtorLibrary => {
-            library_view(&app_state.library_query, &app_state.library_torrents)
+        NyaaView::QtorLibrary(library) => {
+            library::Library::view(library).map(NyaaMessage::Library) // ← .map translates the type
         }
-        NyaaView::Settings => text("Settings menu!").into(),
+        NyaaView::Settings(settings) => {
+            settings::Settings::view(settings).map(NyaaMessage::Settings)
+        }
     }
 }
 

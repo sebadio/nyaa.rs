@@ -1,7 +1,7 @@
 use crate::qbittorrent::{self, Client, Torrent};
 use chrono::{DateTime, Local, Utc};
 use humansize::{DECIMAL, format_size};
-use iced::Length::{Fill, FillPortion};
+use iced::Length::Fill;
 use iced::widget::{button, column, row, scrollable, space, table, text, text_input};
 use iced::{Element, Font, Task, Theme, font};
 use iced_fonts::lucide::refresh_cw;
@@ -100,15 +100,24 @@ impl Library {
             }),
         ];
 
+        const TOOLBAR_HEIGHT: f32 = 40.0;
         let header_search = row![
             text_input("Search for downloaded torrents here", &self.query)
                 .on_input(LibraryMessage::QueryChanged)
+                .line_height(2.0)
                 .padding(8)
                 .width(Fill),
             space().width(12),
-            button(refresh_cw().align_y(iced::Alignment::Center)).on_press(LibraryMessage::Load)
+            button(
+                refresh_cw()
+                    .align_x(iced::Alignment::Center)
+                    .align_y(iced::Alignment::Center)
+            )
+            .height(TOOLBAR_HEIGHT)
+            .width(TOOLBAR_HEIGHT)
+            .on_press(LibraryMessage::Load)
         ]
-        .align_y(iced::Alignment::Center);
+        .height(TOOLBAR_HEIGHT);
 
         column![
             header_search,
@@ -118,7 +127,7 @@ impl Library {
                     .spacing(5)
                     .width(Fill)
             ]
-            .height(FillPortion(20))
+            .height(Fill)
         ]
         .into()
     }

@@ -46,10 +46,7 @@ impl Library {
             LibraryMessage::Load => {
                 let qbt = client.clone();
                 Action::Run(Task::perform(
-                    async move {
-                        qbt.login("iota", "cacatua123").await?;
-                        qbt.get_torrents().await
-                    },
+                    async move { qbt.get_torrents().await },
                     LibraryMessage::Loaded,
                 ))
             }

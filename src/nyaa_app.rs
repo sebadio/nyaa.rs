@@ -1,13 +1,13 @@
+use crate::config::Config;
 use crate::qbittorrent::Client;
 use crate::ui::settings::{self, Settings};
 use crate::ui::{Library, library};
 use crate::ui::{custom_titlebar, main_view, sidebar};
 use iced::Length::Fill;
-use iced::Subscription;
 use iced::time::{self, Duration};
 use iced::widget::{column, row};
 use iced::{Element, Task, window};
-use log::{info, warn};
+use iced::{Subscription, Theme};
 
 #[derive(Default)]
 pub(crate) enum NyaaView {
@@ -33,13 +33,18 @@ pub(crate) enum NyaaMessage {
 pub(crate) struct NyaaAppState {
     pub(crate) current_view: NyaaView,
     qbt_client: Client,
+    config: Config,
 }
 
 impl NyaaAppState {
-    pub(crate) fn new() -> NyaaAppState {
+    pub(crate) fn new(config: Config) -> NyaaAppState {
+        let qbt_client = Client::new(&config.qtor_url, &config.qtor_username, &config.qtor_pass)
+            .expect("client");
+
         NyaaAppState {
             current_view: NyaaView::default(),
-            qbt_client: Client::new("http://127.0.0.1:8080").expect("client"),
+            qbt_client,
+            config,
         }
     }
 
@@ -53,23 +58,47 @@ impl NyaaAppState {
 
     pub(crate) fn update(&mut self, message: NyaaMessage) -> Task<NyaaMessage> {
         match message {
-            NyaaMessage::NavigateToSearch => self.current_view = NyaaView::NyaaSearch,
+            NyaaMessage::NavigateToSearch => {
+                self.current_view = NyaaView::NyaaSearch;
+            }
             NyaaMessage::NavigateToLibrary => {
                 self.current_view = NyaaView::QtorLibrary(Library::new());
                 return Task::done(NyaaMessage::Library(library::LibraryMessage::Load));
             }
             NyaaMessage::NavigateToSettings => {
-                self.current_view = NyaaView::Settings(Settings::new());
+                self.current_view = NyaaView::Settings(Settings::new(self.config.clone()));
                 return Task::none();
             }
             NyaaMessage::Settings(settings_message) => {
+                let config_updated = matches!(
+                    settings_message,
+                    settings::SettingsMessage::UpdatedConfig(_)
+                );
                 let NyaaView::Settings(settings) = &mut self.current_view else {
                     return Task::none();
                 };
 
-                match settings.update(settings_message) {
-                    _ => todo!("TODO"),
+                let action = settings.update(settings_message, &mut self.config);
+
+                if config_updated {
+                    match Client::new(
+                        &self.config.qtor_url,
+                        &self.config.qtor_username,
+                        &self.config.qtor_pass,
+                    ) {
+                        Ok(client) => self.qbt_client = client,
+                        Err(e) => log::warn!("qbt client rebuild failed: {e}"),
+                    }
+
+                    if let Err(e) = self.config.save() {
+                        log::warn!("failed to save config: {e}");
+                    }
                 }
+
+                return match action {
+                    settings::Action::None => Task::none(),
+                    settings::Action::Run(task) => task.map(NyaaMessage::Settings),
+                };
             }
             NyaaMessage::Exit => return iced::exit(),
             NyaaMessage::ToggleWindowMode => {
@@ -95,6 +124,10 @@ impl NyaaAppState {
         }
 
         Task::none()
+    }
+
+    pub(crate) fn theme(&self) -> Option<Theme> {
+        self.config.theme.clone()
     }
 
     pub(crate) fn subscription(&self) -> Subscription<NyaaMessage> {

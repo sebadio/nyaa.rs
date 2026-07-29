@@ -132,7 +132,7 @@ impl NyaaAppState {
 
     pub(crate) fn subscription(&self) -> Subscription<NyaaMessage> {
         match &self.current_view {
-            NyaaView::QtorLibrary(_) => time::every(Duration::from_secs(1))
+            NyaaView::QtorLibrary(_) => time::every(Duration::from_secs(2))
                 .map(|_| NyaaMessage::Library(library::LibraryMessage::Load)),
             _ => Subscription::none(),
         }

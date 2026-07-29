@@ -186,7 +186,7 @@ fn filter_library_torrents(query: &str, torrents: &[Torrent]) -> Vec<Torrent> {
         .iter()
         .filter(|t| {
             let normalized_name = normalize(&t.name);
-            is_video(&t.name) && words.iter().all(|w| normalized_name.contains(w))
+            is_video(&t.content_path) && words.iter().all(|w| normalized_name.contains(w))
         })
         .cloned()
         .collect()

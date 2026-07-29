@@ -29,6 +29,6 @@ impl NyaaSearch {
     pub async fn fetch(&self) -> Result<Feed, NyaaSearchErrors> {
         let resp = self.http_client.get(&self.url).send().await?;
         let bytes = resp.bytes().await?;
-        Ok(parser::parse(bytes.as_ref()).unwrap())
+        Ok(parser::parse(bytes.as_ref())?)
     }
 }

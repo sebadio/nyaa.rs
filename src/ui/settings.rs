@@ -1,9 +1,8 @@
 use iced::Length::{Fill, FillPortion};
 use iced::Theme;
-use iced::widget::{button, column, pick_list, row, text, text_input};
+use iced::widget::{button, column, pick_list, row, space, text, text_input};
 use iced::{Alignment, Element, Task};
 use iced_fonts::lucide::separator_horizontal;
-use iced_fonts::pomicons::space;
 
 use crate::config::Config;
 

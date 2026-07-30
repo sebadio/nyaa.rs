@@ -12,7 +12,7 @@ pub(crate) struct Settings {
 
 #[derive(Debug, Clone)]
 pub(crate) enum SettingsMessage {
-    UpdatedConfig(Config),
+    UpdatedConfig,
     ThemeChanged(Theme),
     UrlChanged(String),
     PassChanged(String),
@@ -70,8 +70,7 @@ impl Settings {
             space().height(Fill),
             row![
                 space().width(Fill),
-                button(text("Apply changes"))
-                    .on_press(SettingsMessage::UpdatedConfig(self.config.clone()))
+                button(text("Apply changes")).on_press(SettingsMessage::UpdatedConfig)
             ]
         ]
         .spacing(10)
@@ -81,33 +80,32 @@ impl Settings {
     pub fn update(&mut self, message: SettingsMessage, new_config: &mut Config) -> Action {
         match message {
             SettingsMessage::UrlChanged(url) => {
-                self.config.qtor_url = url.clone();
-                new_config.qtor_url = url;
+                self.config.qtor_url = url;
 
                 Action::None
             }
 
             SettingsMessage::PassChanged(pass) => {
-                self.config.qtor_pass = pass.clone();
-                new_config.qtor_pass = pass;
+                self.config.qtor_pass = pass;
 
                 Action::None
             }
 
             SettingsMessage::UsernameChanged(username) => {
-                self.config.qtor_username = username.clone();
-                new_config.qtor_username = username;
+                self.config.qtor_username = username;
 
                 Action::None
             }
 
             SettingsMessage::ThemeChanged(theme) => {
-                self.config.theme = Some(theme.clone());
-                new_config.theme = Some(theme);
+                self.config.theme = Some(theme);
 
                 Action::None
             }
-            SettingsMessage::UpdatedConfig(_config) => Action::None,
+            SettingsMessage::UpdatedConfig => {
+                *new_config = self.config.clone();
+                Action::None
+            }
         }
     }
 }

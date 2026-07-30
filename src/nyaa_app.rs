@@ -92,10 +92,8 @@ impl NyaaAppState {
                 }
             }
             NyaaMessage::Settings(settings_message) => {
-                let config_updated = matches!(
-                    settings_message,
-                    settings::SettingsMessage::UpdatedConfig(_)
-                );
+                let config_updated =
+                    matches!(settings_message, settings::SettingsMessage::UpdatedConfig);
                 let NyaaView::Settings(settings) = &mut self.current_view else {
                     return Task::none();
                 };
@@ -152,7 +150,10 @@ impl NyaaAppState {
     }
 
     pub(crate) fn theme(&self) -> Option<Theme> {
-        self.config.theme.clone()
+        match &self.current_view {
+            NyaaView::Settings(settings) => settings.config.theme.clone(),
+            _ => self.config.theme.clone(),
+        }
     }
 
     pub(crate) fn subscription(&self) -> Subscription<NyaaMessage> {

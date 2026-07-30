@@ -26,6 +26,9 @@ pub(crate) enum Error {
 
     #[error("qbittorrent request failed: {0}")]
     Request(String),
+
+    #[error("qbittorrent banned this client, too many requests: {0}")]
+    Banned(String),
 }
 
 impl From<reqwest::Error> for Error {
@@ -39,6 +42,7 @@ pub struct Client {
     http: reqwest::Client,
     base_url: String,
     logged_in: Arc<Mutex<bool>>,
+    auth_failed: Arc<Mutex<bool>>,
     username: String,
     password: String,
 }
@@ -55,6 +59,7 @@ impl Client {
             http,
             base_url: base_url.into(),
             logged_in: Arc::new(Mutex::new(false)),
+            auth_failed: Arc::new(Mutex::new(false)),
             username: username.into(),
             password: password.into(),
         })
@@ -69,22 +74,54 @@ impl Client {
             .send()
             .await?;
 
-        if resp.status().is_success() {
-            Ok(())
-        } else {
-            let status = resp.status();
-            let body = resp.text().await.unwrap_or_default();
-            Err(Error::Auth(format!("login {status}: {}", body.trim())))
+        let status = resp.status();
+
+        match status {
+            StatusCode::FORBIDDEN => {
+                // Banned
+                let body = resp.text().await.unwrap_or_default();
+                Err(Error::Banned(body.trim().to_string()))
+            }
+
+            StatusCode::UNAUTHORIZED => {
+                let body = resp.text().await.unwrap_or_default();
+                Err(Error::Auth(format!("login {status}: {}", body.trim())))
+            }
+
+            _ => {
+                let body = resp.text().await.unwrap_or_default();
+                let body = body.trim();
+                match body {
+                    "Ok." | "" => Ok(()),
+                    other => Err(Error::Auth(format!("login rejected: {other}"))),
+                }
+            }
         }
     }
 
     async fn ensure_logged_in(&self) -> Result<(), Error> {
+        if *self.auth_failed.lock().unwrap() {
+            return Err(Error::Auth(
+                "auth previously failed; update credentials to retry".into(),
+            ));
+        }
+
         if *self.logged_in.lock().unwrap() {
             return Ok(());
         }
-        self.login().await?;
-        *self.logged_in.lock().unwrap() = true;
-        Ok(())
+
+        match self.login().await {
+            Ok(()) => {
+                *self.logged_in.lock().unwrap() = true;
+                Ok(())
+            }
+            Err(e) => {
+                if matches!(e, Error::Banned(_) | Error::Auth(_)) {
+                    *self.auth_failed.lock().unwrap() = true;
+                }
+                Err(e)
+            }
+        }
     }
 
     fn invalidate_login(&self) {
@@ -93,19 +130,37 @@ impl Client {
 
     async fn get(&self, path: impl Into<String>) -> Result<reqwest::Response, Error> {
         self.ensure_logged_in().await?;
-        let url = format!("{}{}", self.base_url, path.into());
 
-        let request = self.http.get(&url);
-        let resp = request.send().await?;
+        let path = path.into();
+        log::debug!("Called GET with path: {}", path);
+
+        let url = format!("{}{}", self.base_url, path);
+
+        let resp = self.http.get(&url).send().await?;
 
         match resp.status() {
-            StatusCode::FORBIDDEN => {
+            StatusCode::FORBIDDEN | StatusCode::UNAUTHORIZED => {
                 self.invalidate_login();
                 self.ensure_logged_in().await?;
-                Ok(self.http.get(&url).send().await?)
+                let resp = self.http.get(&url).send().await?;
+
+                if resp.status() == StatusCode::FORBIDDEN
+                    || resp.status() == StatusCode::UNAUTHORIZED
+                {
+                    return Err(Error::Auth(format!("forbidden after re-auth: {url}")));
+                }
+                log::debug!("Re auth worked and response was OK");
+                Ok(resp)
             }
-            _ => Ok(resp),
+            _ => {
+                log::debug!("Response was ok");
+                Ok(resp)
+            }
         }
+    }
+
+    pub(crate) fn is_logged_in(&self) -> bool {
+        *self.logged_in.lock().unwrap()
     }
 
     pub(crate) async fn get_torrents(&self) -> Result<Vec<Torrent>, Error> {

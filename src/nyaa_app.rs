@@ -8,6 +8,7 @@ use iced::time::{self, Duration};
 use iced::widget::{column, row};
 use iced::{Element, Task, window};
 use iced::{Subscription, Theme};
+use std::io::ErrorKind;
 
 #[derive(Default)]
 pub(crate) enum NyaaView {
@@ -116,7 +117,12 @@ impl NyaaAppState {
                     library::Action::None => Task::none(),
                     library::Action::Run(task) => task.map(NyaaMessage::Library),
                     library::Action::OpenPath(path) => {
-                        let _ = open::that(path);
+                        if let Err(e) = open::that(path) {
+                            match e.kind() {
+                                ErrorKind::NotFound => log::error!("File doesn't exist"),
+                                _ => log::error!("{}", e.kind()),
+                            }
+                        }
                         Task::none()
                     }
                 };

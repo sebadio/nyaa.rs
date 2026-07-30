@@ -2,8 +2,7 @@ pub(crate) mod library;
 pub(crate) use library::Library;
 
 pub(crate) mod settings;
-
-use crate::nyaa_app::{NyaaAppState, NyaaMessage, NyaaView};
+use crate::nyaa_app::{NyaaAppState, NyaaMessage, NyaaView, ScreenKind};
 use iced::Element;
 use iced::Length::Fill;
 use iced::widget::{button, column, container, mouse_area, row, space, text};
@@ -45,14 +44,14 @@ pub(crate) fn sidebar() -> Element<'static, NyaaMessage> {
         row![text("Nyaa.rs").size(36)],
         space().height(20),
         button(text("Nyaa Search"))
-            .on_press(NyaaMessage::NavigateToSearch)
+            .on_press(NyaaMessage::Navigate(ScreenKind::Search))
             .width(Fill),
         button(text("Library"))
-            .on_press(NyaaMessage::NavigateToLibrary)
+            .on_press(NyaaMessage::Navigate(ScreenKind::Library))
             .width(Fill),
         space().height(Fill),
         button(settings())
-            .on_press(NyaaMessage::NavigateToSettings)
+            .on_press(NyaaMessage::Navigate(ScreenKind::Settings))
             .width(Fill)
     ]
     .spacing(8)

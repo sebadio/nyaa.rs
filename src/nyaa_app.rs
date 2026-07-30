@@ -18,15 +18,30 @@ pub(crate) enum NyaaView {
     Settings(Settings),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ScreenKind {
+    Search,
+    Library,
+    Settings,
+}
+
+impl NyaaView {
+    fn kind(&self) -> ScreenKind {
+        match self {
+            NyaaView::NyaaSearch => ScreenKind::Search,
+            NyaaView::QtorLibrary(_) => ScreenKind::Library,
+            NyaaView::Settings(_) => ScreenKind::Settings,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) enum NyaaMessage {
     Exit,
     ToggleWindowMode,
     Minimize,
     Drag,
-    NavigateToSearch,
-    NavigateToLibrary,
-    NavigateToSettings,
+    Navigate(ScreenKind),
     Library(library::LibraryMessage),
     Settings(settings::SettingsMessage),
 }
@@ -59,16 +74,22 @@ impl NyaaAppState {
 
     pub(crate) fn update(&mut self, message: NyaaMessage) -> Task<NyaaMessage> {
         match message {
-            NyaaMessage::NavigateToSearch => {
-                self.current_view = NyaaView::NyaaSearch;
-            }
-            NyaaMessage::NavigateToLibrary => {
-                self.current_view = NyaaView::QtorLibrary(Library::new());
-                return Task::done(NyaaMessage::Library(library::LibraryMessage::Load));
-            }
-            NyaaMessage::NavigateToSettings => {
-                self.current_view = NyaaView::Settings(Settings::new(self.config.clone()));
-                return Task::none();
+            NyaaMessage::Navigate(target) => {
+                if self.current_view.kind() == target {
+                    return Task::none();
+                }
+                log::debug!("Changed view to {target:?}");
+                self.current_view = match target {
+                    ScreenKind::Search => NyaaView::NyaaSearch,
+                    ScreenKind::Library => NyaaView::QtorLibrary(Library::new()),
+                    ScreenKind::Settings => NyaaView::Settings(Settings::new(self.config.clone())),
+                };
+                match target {
+                    ScreenKind::Library => {
+                        Task::done(NyaaMessage::Library(library::LibraryMessage::Load))
+                    }
+                    _ => Task::none(),
+                }
             }
             NyaaMessage::Settings(settings_message) => {
                 let config_updated = matches!(
@@ -128,8 +149,6 @@ impl NyaaAppState {
                 };
             }
         }
-
-        Task::none()
     }
 
     pub(crate) fn theme(&self) -> Option<Theme> {

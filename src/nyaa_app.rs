@@ -115,24 +115,20 @@ impl NyaaAppState {
                     }
                 }
 
-                return match action {
+                match action {
                     settings::Action::None => Task::none(),
                     settings::Action::Run(task) => task.map(NyaaMessage::Settings),
-                };
+                }
             }
-            NyaaMessage::Exit => return iced::exit(),
-            NyaaMessage::ToggleWindowMode => {
-                return window::latest().and_then(window::toggle_maximize);
-            }
-            NyaaMessage::Minimize => {
-                return window::latest().and_then(|id| window::minimize(id, true));
-            }
-            NyaaMessage::Drag => return window::latest().and_then(window::drag),
+            NyaaMessage::Exit => iced::exit(),
+            NyaaMessage::ToggleWindowMode => window::latest().and_then(window::toggle_maximize),
+            NyaaMessage::Minimize => window::latest().and_then(|id| window::minimize(id, true)),
+            NyaaMessage::Drag => window::latest().and_then(window::drag),
             NyaaMessage::Library(library_message) => {
                 let NyaaView::QtorLibrary(library) = &mut self.current_view else {
                     return Task::none();
                 };
-                return match library.update(library_message, &self.qbt_client) {
+                match library.update(library_message, &self.qbt_client) {
                     library::Action::None => Task::none(),
                     library::Action::Run(task) => task.map(NyaaMessage::Library),
                     library::Action::OpenPath(path) => {
@@ -144,7 +140,7 @@ impl NyaaAppState {
                         }
                         Task::none()
                     }
-                };
+                }
             }
         }
     }

@@ -1,11 +1,11 @@
-use crate::nyaa::{NyaaItem, NyaaRss, request::NyaaRequest};
+use crate::{NyaaItem, NyaaRss, request::NyaaRequest};
 use log::info;
 use quick_xml;
 use reqwest;
 use thiserror::Error;
 
 #[derive(Debug, Error, Clone)]
-pub(crate) enum NyaaAdapterError {
+pub enum NyaaAdapterError {
     #[error("failed to fetch rss feed: {0}")]
     Request(String),
 
@@ -34,19 +34,19 @@ impl From<reqwest::Error> for NyaaAdapterError {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct NyaaItemBytes {
-    pub(crate) item: NyaaItem,
-    pub(crate) bytes: Vec<u8>,
+pub struct NyaaItemBytes {
+    pub item: NyaaItem,
+    pub bytes: Vec<u8>,
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct NyaaAdapter {
+pub struct NyaaAdapter {
     http_client: reqwest::Client,
     url: String,
 }
 
 impl NyaaAdapter {
-    pub(crate) fn new() -> Result<Self, NyaaAdapterError> {
+    pub fn new() -> Result<Self, NyaaAdapterError> {
         let http = reqwest::Client::builder().build()?;
         Ok(Self {
             http_client: http,
@@ -54,7 +54,7 @@ impl NyaaAdapter {
         })
     }
 
-    pub(crate) async fn download_torrent(
+    pub async fn download_torrent(
         &self,
         item: NyaaItem,
     ) -> Result<NyaaItemBytes, NyaaAdapterError> {
@@ -66,7 +66,7 @@ impl NyaaAdapter {
         })
     }
 
-    pub(crate) async fn fetch(
+    pub async fn fetch(
         &self,
         request: Option<NyaaRequest>,
     ) -> Result<Vec<NyaaItem>, NyaaAdapterError> {

@@ -1,7 +1,7 @@
 use std::fmt;
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum NyaaCategory {
+pub enum NyaaCategory {
     #[default]
     Anime,
     EnglishTranslated,

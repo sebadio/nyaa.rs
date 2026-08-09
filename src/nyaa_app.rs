@@ -1,21 +1,21 @@
 use crate::config::Config;
-use crate::nyaa::NyaaAdapter;
-use crate::nyaa::adapter::NyaaItemBytes;
-use crate::qbittorrent;
-use crate::qbittorrent::{Client, Torrent, TorrentPostResponse};
+use crate::ui::main_view;
 use crate::ui::settings::{self, Settings};
 use crate::ui::widgets::modals::{self, modal, post_download};
+use crate::ui::widgets::{sidebar, status_bar, titlebar};
 use crate::ui::{Library, library};
 use crate::ui::{Search, search};
-use crate::ui::{custom_titlebar, main_view, sidebar};
-use crate::util::truncate_with_ellipsis;
-
-use iced::Length::{self, Fill};
+use iced::Length::Fill;
+use iced::task::{Sipper, sipper};
 use iced::time::{self, Duration};
-use iced::widget::{column, progress_bar, row, text};
+use iced::widget::{column, row};
 use iced::{Element, Subscription, Task, Theme, window};
 use log::{error, info};
+use nyaa::NyaaAdapter;
+use nyaa::adapter::NyaaItemBytes;
+use qbittorrent::{self, Client, Error, Torrent, TorrentPostResponse};
 use std::io::ErrorKind;
+use tokio::time::sleep;
 
 pub(crate) enum NyaaView {
     NyaaSearch(Search),
@@ -110,11 +110,11 @@ impl NyaaAppState {
 
     pub(crate) fn view(&self) -> Element<'_, NyaaMessage> {
         let content = column![
-            self.config.uses_custom_titlebar.then(custom_titlebar),
+            self.config.uses_custom_titlebar.then(titlebar),
             column![row![sidebar(), column![main_view(self)].width(Fill)].spacing(12),]
                 .padding(12)
                 .height(Fill),
-            self.active_download.as_ref().map(Self::status_bar)
+            self.active_download.as_ref().map(status_bar)
         ];
 
         if let Some(active_modal) = &self.active_modal {
@@ -202,33 +202,18 @@ impl NyaaAppState {
                 }
             }
             NyaaMessage::Settings(settings_message) => {
-                let config_updated =
-                    matches!(settings_message, settings::SettingsMessage::UpdatedConfig);
                 let NyaaView::Settings(settings) = &mut self.current_view else {
                     return Task::none();
                 };
 
-                let action = settings.update(settings_message, &mut self.config);
-
-                if config_updated {
-                    match Client::new(
-                        &self.config.qtor_url,
-                        &self.config.qtor_username,
-                        &self.config.qtor_pass,
-                        Some(&self.config.qtor_save_path),
-                    ) {
-                        Ok(client) => self.qbt_client = client,
-                        Err(e) => log::warn!("qbt client rebuild failed: {e}"),
-                    }
-
-                    if let Err(e) = self.config.save() {
-                        log::warn!("failed to save config: {e}");
-                    }
-                }
-
-                match action {
+                match settings.update(settings_message, &mut self.config) {
                     settings::Action::None => Task::none(),
-                    settings::Action::Run(task) => task.map(NyaaMessage::Settings),
+                    settings::Action::Task(task) => task.map(NyaaMessage::Settings),
+                    settings::Action::ApplyConfig => {
+                        self.rebuild_qbt_client();
+                        self.persist_config();
+                        Task::none()
+                    }
                 }
             }
             NyaaMessage::Exit => iced::exit(),
@@ -241,7 +226,7 @@ impl NyaaAppState {
                 };
                 match library.update(library_message, &self.qbt_client) {
                     library::Action::None => Task::none(),
-                    library::Action::Run(task) => task.map(NyaaMessage::Library),
+                    library::Action::Task(task) => task.map(NyaaMessage::Library),
                     library::Action::OpenPath(path) => {
                         if let Err(e) = open::that(path) {
                             match e.kind() {
@@ -265,7 +250,7 @@ impl NyaaAppState {
                         Task::none()
                     }
                     search::Action::None => Task::none(),
-                    search::Action::Run(task) => task.map(NyaaMessage::Search),
+                    search::Action::Task(task) => task.map(NyaaMessage::Search),
                     search::Action::AddToQbt(nyaa_combo) => {
                         self.pending_download = Some(nyaa_combo);
                         self.active_modal =
@@ -279,10 +264,11 @@ impl NyaaAppState {
                 let hash = res
                     .added_torrent_ids
                     .first()
-                    .expect("queue_torrent guarantees a non empty list");
+                    .expect("queue_torrent guarantees a non empty list")
+                    .to_string();
 
                 Task::sip(
-                    self.qbt_client.track_torrent(hash),
+                    track_torrent(&self.qbt_client, hash),
                     |(name, progress)| NyaaMessage::DownloadProgress { name, progress },
                     NyaaMessage::DownloadFinished,
                 )
@@ -295,7 +281,7 @@ impl NyaaAppState {
                 qbittorrent::Error::AlreadyExists() => {
                     info!("Torrent already in qBittorrent — tracking existing one");
                     Task::sip(
-                        self.qbt_client.track_torrent(original_hash),
+                        track_torrent(&self.qbt_client, original_hash),
                         |(name, progress)| NyaaMessage::DownloadProgress { name, progress },
                         NyaaMessage::DownloadFinished,
                     )
@@ -332,20 +318,22 @@ impl NyaaAppState {
         }
     }
 
-    fn status_bar(download: &ActiveDownload) -> Element<'_, NyaaMessage> {
-        let download_text = format!(
-            "Downloading: {}",
-            truncate_with_ellipsis(&download.name, 60)
-        );
+    fn rebuild_qbt_client(&mut self) {
+        match Client::new(
+            &self.config.qtor_url,
+            &self.config.qtor_username,
+            &self.config.qtor_pass,
+            Some(&self.config.qtor_save_path),
+        ) {
+            Ok(client) => self.qbt_client = client,
+            Err(e) => error!("qbittorrent client rebuild failed: {e}"),
+        }
+    }
 
-        row![
-            text(download_text).width(Fill),
-            progress_bar(0.0..=1.0, download.progress).length(Length::Fixed(200.0)),
-            text(format!("{:.0}%", download.progress * 100.0)),
-        ]
-        .padding(8)
-        .height(40)
-        .into()
+    fn persist_config(&mut self) {
+        if let Err(e) = self.config.save() {
+            log::warn!("failed to save config: {e}");
+        }
     }
 
     pub(crate) fn theme(&self) -> Option<Theme> {
@@ -364,4 +352,26 @@ impl NyaaAppState {
             _ => Subscription::none(),
         }
     }
+}
+
+pub fn track_torrent(
+    client: &Client,
+    hash: String,
+) -> impl Sipper<Result<Torrent, qbittorrent::Error>, (String, f32)> + 'static {
+    let client = client.clone();
+
+    sipper(move |mut sender| async move {
+        loop {
+            match client.get_torrent_by_hash(&hash).await {
+                Ok(t) if t.progress >= 1.0 => return Ok(t),
+                Ok(t) => {
+                    sender.send((t.name, t.progress)).await;
+                }
+                Err(e @ Error::TorrentNotFound(_)) => return Err(e),
+                Err(e) => error!("{e}"),
+            }
+
+            sleep(Duration::from_secs(1)).await;
+        }
+    })
 }

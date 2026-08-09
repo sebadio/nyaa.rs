@@ -2449,6 +2449,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "nyaa"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "quick-xml",
+ "reqwest",
+ "serde",
+ "thiserror 2.0.19",
+]
+
+[[package]]
 name = "nyaa-rs"
 version = "0.1.0"
 dependencies = [
@@ -2459,9 +2470,9 @@ dependencies = [
  "iced",
  "iced_fonts",
  "log",
+ "nyaa",
  "open",
- "quick-xml",
- "reqwest",
+ "qbittorrent",
  "rfd",
  "serde",
  "thiserror 2.0.19",
@@ -3090,6 +3101,16 @@ checksum = "6f42ea446cab60335f76979ec15e12619a2165b5ae2c12166bef27d283a9fadf"
 dependencies = [
  "idna",
  "psl-types",
+]
+
+[[package]]
+name = "qbittorrent"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "reqwest",
+ "serde",
+ "thiserror 2.0.19",
 ]
 
 [[package]]

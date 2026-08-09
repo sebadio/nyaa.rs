@@ -1,4 +1,3 @@
-use crate::qbittorrent::{self, Client, Torrent};
 use chrono::{DateTime, Local, Utc};
 use humansize::{DECIMAL, format_size};
 use iced::Length::{Fill, FillPortion};
@@ -7,6 +6,7 @@ use iced::widget::text::Wrapping;
 use iced::widget::{button, column, progress_bar, row, scrollable, space, table, text, text_input};
 use iced::{Element, Font, Task, Theme, font};
 use iced_fonts::lucide::refresh_cw;
+use qbittorrent::{self, Client, Torrent};
 use std::format;
 use std::path::Path;
 
@@ -25,7 +25,7 @@ pub(crate) enum LibraryMessage {
 
 pub(crate) enum Action {
     None,
-    Run(Task<LibraryMessage>),
+    Task(Task<LibraryMessage>),
     OpenPath(String),
 }
 
@@ -45,7 +45,7 @@ impl Library {
             }
             LibraryMessage::Load => {
                 let qbt = client.clone();
-                Action::Run(Task::perform(
+                Action::Task(Task::perform(
                     async move { qbt.get_torrents().await },
                     LibraryMessage::Loaded,
                 ))

@@ -1,17 +1,17 @@
-use crate::nyaa::adapter::NyaaItemBytes;
-use crate::nyaa::filter::NyaaFilter;
-use crate::nyaa::request::NyaaRequest;
-use crate::nyaa::{NyaaAdapter, NyaaAdapterError, NyaaCategory, NyaaItem};
 use iced::Length::Fill;
 use iced::widget::{Text, button, column, pick_list, row, scrollable, space, text, text_input};
 use iced::{Alignment, Element, Task, Theme};
 use iced_fonts::lucide::search;
 use log::{error, info};
+use nyaa::adapter::NyaaItemBytes;
+use nyaa::filter::NyaaFilter;
+use nyaa::request::NyaaRequest;
+use nyaa::{NyaaAdapter, NyaaAdapterError, NyaaCategory, NyaaItem};
 use thiserror::Error;
 
 pub(crate) enum Action {
     None,
-    Run(Task<NyaaSearchMessage>),
+    Task(Task<NyaaSearchMessage>),
     AddToQbt(NyaaItemBytes),
     ShowError(SearchViewError),
 }
@@ -129,7 +129,7 @@ impl Search {
                     .set_category(self.category)
                     .set_filter(self.filter);
 
-                Action::Run(Task::perform(
+                Action::Task(Task::perform(
                     async move { client.fetch(Some(request)).await },
                     NyaaSearchMessage::SearchResults,
                 ))
@@ -164,7 +164,7 @@ impl Search {
 
             NyaaSearchMessage::DownloadTorrent(item) => {
                 let client = nyaa_client.clone();
-                Action::Run(Task::perform(
+                Action::Task(Task::perform(
                     async move { client.download_torrent(item).await },
                     NyaaSearchMessage::DownloadFinished,
                 ))

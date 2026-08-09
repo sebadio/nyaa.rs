@@ -1,9 +1,10 @@
 use crate::config::Config;
 use iced::Length::{Fill, FillPortion};
-use iced::widget::{Text, button, column, pick_list, row, space, text, text_input};
+use iced::border::Radius;
+use iced::widget::{Text, button, column, pick_list, row, rule, space, text, text_input};
 use iced::{Alignment, Element, Task};
 use iced::{Color, Theme};
-use iced_fonts::lucide::{folder, separator_horizontal};
+use iced_fonts::lucide::folder;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -26,7 +27,8 @@ pub(crate) enum SettingsMessage {
 
 pub(crate) enum Action {
     None,
-    Run(Task<SettingsMessage>),
+    ApplyConfig,
+    Task(Task<SettingsMessage>),
 }
 
 impl Settings {
@@ -46,7 +48,12 @@ impl Settings {
 
         column![
             text("Config").size(48),
-            separator_horizontal().width(Fill),
+            rule::horizontal(2).style(|theme: &Theme| rule::Style {
+                fill_mode: rule::FillMode::Full,
+                radius: Radius::default(),
+                snap: true,
+                color: theme.extended_palette().secondary.weak.color
+            }),
             row![
                 text("Theme:")
                     .width(FillPortion(3))
@@ -141,7 +148,7 @@ impl Settings {
 
             SettingsMessage::PickSavePath => {
                 let start = self.config.qtor_save_path.clone();
-                Action::Run(Task::perform(
+                Action::Task(Task::perform(
                     pick_folder(start),
                     SettingsMessage::SavePathPicked,
                 ))
@@ -157,7 +164,7 @@ impl Settings {
 
             SettingsMessage::UpdatedConfig => {
                 *new_config = self.config.clone();
-                Action::None
+                Action::ApplyConfig
             }
         }
     }

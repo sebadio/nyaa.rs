@@ -1,16 +1,16 @@
-use crate::nyaa::{NyaaCategory, filter::NyaaFilter};
+use crate::{NyaaCategory, filter::NyaaFilter};
 
 // Page filtering doesn't work in rss mode
 // maybe scrape the html instaed?
-pub(crate) struct NyaaRequest {
-    pub(crate) query: String,
-    pub(crate) page: i32,
-    pub(crate) category: NyaaCategory,
-    pub(crate) filter: NyaaFilter,
+pub struct NyaaRequest {
+    pub query: String,
+    pub page: i32,
+    pub category: NyaaCategory,
+    pub filter: NyaaFilter,
 }
 
 impl NyaaRequest {
-    pub(crate) fn new(query: impl Into<String>) -> NyaaRequest {
+    pub fn new(query: impl Into<String>) -> NyaaRequest {
         NyaaRequest {
             query: query.into(),
             category: NyaaCategory::Anime,
@@ -19,23 +19,23 @@ impl NyaaRequest {
         }
     }
 
-    pub(crate) fn set_category(mut self, category: NyaaCategory) -> NyaaRequest {
+    pub fn set_category(mut self, category: NyaaCategory) -> NyaaRequest {
         self.category = category;
         self
     }
 
     #[expect(dead_code)] // FIX: Do i need to implement html scrape just for this
-    pub(crate) fn set_page(mut self, page: i32) -> NyaaRequest {
+    pub fn set_page(mut self, page: i32) -> NyaaRequest {
         self.page = page;
         self
     }
 
-    pub(crate) fn set_filter(mut self, filter: NyaaFilter) -> NyaaRequest {
+    pub fn set_filter(mut self, filter: NyaaFilter) -> NyaaRequest {
         self.filter = filter;
         self
     }
 
-    pub(crate) fn to_query_pairs(self) -> Vec<(&'static str, String)> {
+    pub fn to_query_pairs(self) -> Vec<(&'static str, String)> {
         vec![
             ("q", self.query),
             ("c", self.category.as_str().to_string()),

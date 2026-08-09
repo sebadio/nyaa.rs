@@ -1,0 +1,10 @@
+[package]
+name = "qbittorrent"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+log = "0.4.33"
+serde = { version = "1.0.229", features = ["derive"] }
+thiserror = "2.0.19"
+reqwest = { version = "0.13.4", features = ["json", "cookies", "form", "multipart", "query"] }

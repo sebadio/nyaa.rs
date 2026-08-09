@@ -1,7 +1,5 @@
 pub mod config;
-pub mod nyaa;
 pub mod nyaa_app;
-pub mod qbittorrent;
 pub mod ui;
 pub mod util;
 

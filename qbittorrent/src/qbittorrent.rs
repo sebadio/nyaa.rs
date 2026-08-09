@@ -1,39 +1,11 @@
-use iced::task::{Sipper, sipper};
-use log::debug;
+use crate::torrent::{Torrent, TorrentPostResponse};
 use reqwest::{self, StatusCode, multipart};
-use serde::{Deserialize, Serialize};
-use std::{
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use serde::Serialize;
+use std::sync::{Arc, Mutex};
 use thiserror::Error;
-use tokio::time::sleep;
-
-#[derive(Debug, Deserialize, Clone)]
-pub(crate) struct TorrentPostResponse {
-    pub added_torrent_ids: Vec<String>,
-    pub failure_count: u32,
-    pub pending_count: u32,
-    pub success_count: u32,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub(crate) struct Torrent {
-    pub name: String,
-    pub hash: String,
-    pub content_path: String,
-    pub size: u64,
-    pub progress: f32,
-    pub state: String,
-    pub num_seeds: u32,
-    pub num_leechs: u32,
-    pub num_complete: u32,
-    pub num_incomplete: u32,
-    pub added_on: i64,
-}
 
 #[derive(Debug, Error, Clone)]
-pub(crate) enum Error {
+pub enum Error {
     #[error("error authenticating against qbittorrent: {0}")]
     Auth(String),
 
@@ -44,7 +16,7 @@ pub(crate) enum Error {
     Banned(String),
 
     #[error("torrent disappeard from qBittorrent before finishing: {0}")]
-    TorrentRemoved(String),
+    TorrentNotFound(String),
 
     #[error("conflict, torrent already exists")]
     AlreadyExists(),
@@ -71,7 +43,7 @@ pub struct Client {
 }
 
 impl Client {
-    pub(crate) fn new(
+    pub fn new(
         base_url: impl Into<String>,
         username: impl Into<String>,
         password: impl Into<String>,
@@ -194,11 +166,11 @@ impl Client {
         }
     }
 
-    pub(crate) fn is_logged_in(&self) -> bool {
+    pub fn is_logged_in(&self) -> bool {
         *self.logged_in.lock().unwrap()
     }
 
-    pub(crate) async fn get_torrents(&self) -> Result<Vec<Torrent>, Error> {
+    pub async fn get_torrents(&self) -> Result<Vec<Torrent>, Error> {
         Ok(self
             .get(
                 "/api/v2/torrents/info?sort=added_on&reverse=true",
@@ -209,7 +181,7 @@ impl Client {
             .await?)
     }
 
-    async fn get_torrent_by_hash(&self, hash: impl Into<String>) -> Result<Torrent, Error> {
+    pub async fn get_torrent_by_hash(&self, hash: impl Into<String>) -> Result<Torrent, Error> {
         let hash = hash.into();
 
         let torrents = self
@@ -220,11 +192,11 @@ impl Client {
 
         match torrents.first() {
             Some(t) => Ok(t.to_owned()),
-            None => Err(Error::TorrentRemoved(hash)),
+            None => Err(Error::TorrentNotFound(hash)),
         }
     }
 
-    pub(crate) async fn queue_torrent(
+    pub async fn queue_torrent(
         &self,
         torrent_bytes: Vec<u8>,
     ) -> Result<TorrentPostResponse, Error> {
@@ -264,27 +236,5 @@ impl Client {
         }
 
         Ok(res)
-    }
-
-    pub(crate) fn track_torrent(
-        &self,
-        hash: impl Into<String>,
-    ) -> impl Sipper<Result<Torrent, Error>, (String, f32)> + 'static {
-        let client = self.clone();
-        let hash = hash.into();
-
-        sipper(move |mut sender| async move {
-            loop {
-                match client.get_torrent_by_hash(&hash).await {
-                    Ok(t) if t.progress >= 1.0 => return Ok(t),
-                    Ok(t) => {
-                        sender.send((t.name, t.progress)).await;
-                    }
-                    Err(e @ Error::TorrentRemoved(_)) => return Err(e),
-                    Err(e) => debug!("{e}"),
-                }
-                sleep(Duration::from_secs(1)).await;
-            }
-        })
     }
 }

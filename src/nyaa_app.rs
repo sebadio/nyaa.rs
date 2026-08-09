@@ -1,21 +1,21 @@
 use crate::config::Config;
-use crate::nyaa::NyaaAdapter;
-use crate::nyaa::adapter::NyaaItemBytes;
-use crate::qbittorrent;
-use crate::qbittorrent::{Client, Torrent, TorrentPostResponse};
 use crate::ui::settings::{self, Settings};
 use crate::ui::widgets::modals::{self, modal, post_download};
 use crate::ui::{Library, library};
 use crate::ui::{Search, search};
 use crate::ui::{custom_titlebar, main_view, sidebar};
 use crate::util::truncate_with_ellipsis;
-
 use iced::Length::{self, Fill};
+use iced::task::{Sipper, sipper};
 use iced::time::{self, Duration};
 use iced::widget::{column, progress_bar, row, text};
 use iced::{Element, Subscription, Task, Theme, window};
 use log::{error, info};
+use nyaa::NyaaAdapter;
+use nyaa::adapter::NyaaItemBytes;
+use qbittorrent::{self, Client, Error, Torrent, TorrentPostResponse};
 use std::io::ErrorKind;
+use tokio::time::sleep;
 
 pub(crate) enum NyaaView {
     NyaaSearch(Search),
@@ -279,10 +279,11 @@ impl NyaaAppState {
                 let hash = res
                     .added_torrent_ids
                     .first()
-                    .expect("queue_torrent guarantees a non empty list");
+                    .expect("queue_torrent guarantees a non empty list")
+                    .to_string();
 
                 Task::sip(
-                    self.qbt_client.track_torrent(hash),
+                    track_torrent(&self.qbt_client, hash),
                     |(name, progress)| NyaaMessage::DownloadProgress { name, progress },
                     NyaaMessage::DownloadFinished,
                 )
@@ -295,7 +296,7 @@ impl NyaaAppState {
                 qbittorrent::Error::AlreadyExists() => {
                     info!("Torrent already in qBittorrent — tracking existing one");
                     Task::sip(
-                        self.qbt_client.track_torrent(original_hash),
+                        track_torrent(&self.qbt_client, original_hash),
                         |(name, progress)| NyaaMessage::DownloadProgress { name, progress },
                         NyaaMessage::DownloadFinished,
                     )
@@ -364,4 +365,26 @@ impl NyaaAppState {
             _ => Subscription::none(),
         }
     }
+}
+
+pub fn track_torrent(
+    client: &Client,
+    hash: String,
+) -> impl Sipper<Result<Torrent, qbittorrent::Error>, (String, f32)> + 'static {
+    let client = client.clone();
+
+    sipper(move |mut sender| async move {
+        loop {
+            match client.get_torrent_by_hash(&hash).await {
+                Ok(t) if t.progress >= 1.0 => return Ok(t),
+                Ok(t) => {
+                    sender.send((t.name, t.progress)).await;
+                }
+                Err(e @ Error::TorrentNotFound(_)) => return Err(e),
+                Err(e) => error!("{e}"),
+            }
+
+            sleep(Duration::from_secs(1)).await;
+        }
+    })
 }

@@ -1,9 +1,10 @@
 use crate::config::Config;
 use iced::Length::{Fill, FillPortion};
-use iced::widget::{Text, button, column, pick_list, row, space, text, text_input};
+use iced::border::Radius;
+use iced::widget::{Text, button, column, pick_list, row, rule, space, text, text_input};
 use iced::{Alignment, Element, Task};
 use iced::{Color, Theme};
-use iced_fonts::lucide::{folder, separator_horizontal};
+use iced_fonts::lucide::folder;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -46,7 +47,12 @@ impl Settings {
 
         column![
             text("Config").size(48),
-            separator_horizontal().width(Fill),
+            rule::horizontal(2).style(|theme: &Theme| rule::Style {
+                fill_mode: rule::FillMode::Full,
+                radius: Radius::default(),
+                snap: true,
+                color: theme.extended_palette().secondary.weak.color
+            }),
             row![
                 text("Theme:")
                     .width(FillPortion(3))

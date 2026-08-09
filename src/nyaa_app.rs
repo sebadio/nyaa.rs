@@ -1,9 +1,10 @@
 use crate::config::Config;
+use crate::ui::main_view;
 use crate::ui::settings::{self, Settings};
 use crate::ui::widgets::modals::{self, modal, post_download};
+use crate::ui::widgets::{sidebar, titlebar};
 use crate::ui::{Library, library};
 use crate::ui::{Search, search};
-use crate::ui::{custom_titlebar, main_view, sidebar};
 use crate::util::truncate_with_ellipsis;
 use iced::Length::{self, Fill};
 use iced::task::{Sipper, sipper};
@@ -110,7 +111,7 @@ impl NyaaAppState {
 
     pub(crate) fn view(&self) -> Element<'_, NyaaMessage> {
         let content = column![
-            self.config.uses_custom_titlebar.then(custom_titlebar),
+            self.config.uses_custom_titlebar.then(titlebar),
             column![row![sidebar(), column![main_view(self)].width(Fill)].spacing(12),]
                 .padding(12)
                 .height(Fill),

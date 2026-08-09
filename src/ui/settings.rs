@@ -27,7 +27,8 @@ pub(crate) enum SettingsMessage {
 
 pub(crate) enum Action {
     None,
-    Run(Task<SettingsMessage>),
+    ApplyConfig,
+    Task(Task<SettingsMessage>),
 }
 
 impl Settings {
@@ -147,7 +148,7 @@ impl Settings {
 
             SettingsMessage::PickSavePath => {
                 let start = self.config.qtor_save_path.clone();
-                Action::Run(Task::perform(
+                Action::Task(Task::perform(
                     pick_folder(start),
                     SettingsMessage::SavePathPicked,
                 ))
@@ -163,7 +164,7 @@ impl Settings {
 
             SettingsMessage::UpdatedConfig => {
                 *new_config = self.config.clone();
-                Action::None
+                Action::ApplyConfig
             }
         }
     }

@@ -202,33 +202,18 @@ impl NyaaAppState {
                 }
             }
             NyaaMessage::Settings(settings_message) => {
-                let config_updated =
-                    matches!(settings_message, settings::SettingsMessage::UpdatedConfig);
                 let NyaaView::Settings(settings) = &mut self.current_view else {
                     return Task::none();
                 };
 
-                let action = settings.update(settings_message, &mut self.config);
-
-                if config_updated {
-                    match Client::new(
-                        &self.config.qtor_url,
-                        &self.config.qtor_username,
-                        &self.config.qtor_pass,
-                        Some(&self.config.qtor_save_path),
-                    ) {
-                        Ok(client) => self.qbt_client = client,
-                        Err(e) => log::warn!("qbt client rebuild failed: {e}"),
-                    }
-
-                    if let Err(e) = self.config.save() {
-                        log::warn!("failed to save config: {e}");
-                    }
-                }
-
-                match action {
+                match settings.update(settings_message, &mut self.config) {
                     settings::Action::None => Task::none(),
-                    settings::Action::Run(task) => task.map(NyaaMessage::Settings),
+                    settings::Action::Task(task) => task.map(NyaaMessage::Settings),
+                    settings::Action::ApplyConfig => {
+                        self.rebuild_qbt_client();
+                        self.persist_config();
+                        Task::none()
+                    }
                 }
             }
             NyaaMessage::Exit => iced::exit(),
@@ -330,6 +315,24 @@ impl NyaaAppState {
                 }
                 Task::none()
             }
+        }
+    }
+
+    fn rebuild_qbt_client(&mut self) {
+        match Client::new(
+            &self.config.qtor_url,
+            &self.config.qtor_username,
+            &self.config.qtor_pass,
+            Some(&self.config.qtor_save_path),
+        ) {
+            Ok(client) => self.qbt_client = client,
+            Err(e) => error!("qbittorrent client rebuild failed: {e}"),
+        }
+    }
+
+    fn persist_config(&mut self) {
+        if let Err(e) = self.config.save() {
+            log::warn!("failed to save config: {e}");
         }
     }
 

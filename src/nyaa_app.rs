@@ -2,14 +2,13 @@ use crate::config::Config;
 use crate::ui::main_view;
 use crate::ui::settings::{self, Settings};
 use crate::ui::widgets::modals::{self, modal, post_download};
-use crate::ui::widgets::{sidebar, titlebar};
+use crate::ui::widgets::{sidebar, status_bar, titlebar};
 use crate::ui::{Library, library};
 use crate::ui::{Search, search};
-use crate::util::truncate_with_ellipsis;
-use iced::Length::{self, Fill};
+use iced::Length::Fill;
 use iced::task::{Sipper, sipper};
 use iced::time::{self, Duration};
-use iced::widget::{column, progress_bar, row, text};
+use iced::widget::{column, row};
 use iced::{Element, Subscription, Task, Theme, window};
 use log::{error, info};
 use nyaa::NyaaAdapter;
@@ -115,7 +114,7 @@ impl NyaaAppState {
             column![row![sidebar(), column![main_view(self)].width(Fill)].spacing(12),]
                 .padding(12)
                 .height(Fill),
-            self.active_download.as_ref().map(Self::status_bar)
+            self.active_download.as_ref().map(status_bar)
         ];
 
         if let Some(active_modal) = &self.active_modal {
@@ -335,22 +334,6 @@ impl NyaaAppState {
         if let Err(e) = self.config.save() {
             log::warn!("failed to save config: {e}");
         }
-    }
-
-    fn status_bar(download: &ActiveDownload) -> Element<'_, NyaaMessage> {
-        let download_text = format!(
-            "Downloading: {}",
-            truncate_with_ellipsis(&download.name, 60)
-        );
-
-        row![
-            text(download_text).width(Fill),
-            progress_bar(0.0..=1.0, download.progress).length(Length::Fixed(200.0)),
-            text(format!("{:.0}%", download.progress * 100.0)),
-        ]
-        .padding(8)
-        .height(40)
-        .into()
     }
 
     pub(crate) fn theme(&self) -> Option<Theme> {

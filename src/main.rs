@@ -1,8 +1,9 @@
 pub mod config;
+pub mod nyaa;
 pub mod nyaa_app;
-pub mod nyaa_search;
 pub mod qbittorrent;
 pub mod ui;
+pub mod util;
 
 use crate::config::Config;
 use iced::window::Settings;
@@ -25,7 +26,7 @@ fn main() -> iced::Result {
         NyaaAppState::update,
         NyaaAppState::view,
     )
-    .default_font(Font::with_name("Monocraft"))
+    .default_font(Font::with_name("Monocraft")) // FIX <- This is slowing down the startup
     .decorations(decorations)
     .font(LUCIDE_FONT_BYTES)
     .theme(NyaaAppState::theme)

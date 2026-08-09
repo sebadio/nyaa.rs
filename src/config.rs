@@ -16,6 +16,7 @@ pub(crate) struct Config {
     pub(crate) qtor_url: String,
     pub(crate) qtor_username: String,
     pub(crate) qtor_pass: String,
+    pub(crate) qtor_save_path: String,
     pub(crate) uses_custom_titlebar: bool,
     pub(crate) window_size: WindowSize,
     #[serde(default, with = "theme_serde")]
@@ -110,6 +111,9 @@ impl Default for Config {
             qtor_pass: "adminadmin".into(),
             theme: Some(Theme::Ferra),
             uses_custom_titlebar: false,
+            qtor_save_path: dirs::download_dir()
+                .map(|p| p.to_string_lossy().into_owned())
+                .unwrap_or_default(),
             window_size: WindowSize {
                 width: 1280.0,
                 height: 720.0,

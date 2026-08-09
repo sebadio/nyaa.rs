@@ -1,11 +1,24 @@
-use std::sync::{Arc, Mutex};
-
-use reqwest::{self, StatusCode};
-use serde::Deserialize;
+use iced::task::{Sipper, sipper};
+use log::debug;
+use reqwest::{self, StatusCode, multipart};
+use serde::{Deserialize, Serialize};
+use std::{
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 use thiserror::Error;
+use tokio::time::sleep;
+
+#[derive(Debug, Deserialize, Clone)]
+pub(crate) struct TorrentPostResponse {
+    pub added_torrent_ids: Vec<String>,
+    pub failure_count: u32,
+    pub pending_count: u32,
+    pub success_count: u32,
+}
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct Torrent {
+pub(crate) struct Torrent {
     pub name: String,
     pub hash: String,
     pub content_path: String,
@@ -29,11 +42,20 @@ pub(crate) enum Error {
 
     #[error("qbittorrent banned this client, too many requests: {0}")]
     Banned(String),
+
+    #[error("torrent disappeard from qBittorrent before finishing: {0}")]
+    TorrentRemoved(String),
+
+    #[error("conflict, torrent already exists")]
+    AlreadyExists(),
 }
 
 impl From<reqwest::Error> for Error {
     fn from(e: reqwest::Error) -> Self {
-        Error::Request(e.to_string())
+        match e.status() {
+            Some(reqwest::StatusCode::CONFLICT) => Error::AlreadyExists(),
+            _ => Error::Request(e.to_string()),
+        }
     }
 }
 
@@ -45,6 +67,7 @@ pub struct Client {
     auth_failed: Arc<Mutex<bool>>,
     username: String,
     password: String,
+    save_path: Option<String>,
 }
 
 impl Client {
@@ -52,6 +75,7 @@ impl Client {
         base_url: impl Into<String>,
         username: impl Into<String>,
         password: impl Into<String>,
+        save_path: Option<impl Into<String>>,
     ) -> Result<Self, Error> {
         let http = reqwest::Client::builder().cookie_store(true).build()?;
 
@@ -62,6 +86,7 @@ impl Client {
             auth_failed: Arc::new(Mutex::new(false)),
             username: username.into(),
             password: password.into(),
+            save_path: save_path.map(Into::into),
         })
     }
 
@@ -128,15 +153,25 @@ impl Client {
         *self.logged_in.lock().unwrap() = false;
     }
 
-    async fn get(&self, path: impl Into<String>) -> Result<reqwest::Response, Error> {
+    async fn get<T: Serialize + ?Sized>(
+        &self,
+        path: impl Into<String>,
+        query: Option<&T>,
+    ) -> Result<reqwest::Response, Error> {
         self.ensure_logged_in().await?;
 
         let path = path.into();
-        log::debug!("Called GET with path: {}", path);
-
         let url = format!("{}{}", self.base_url, path);
+        let req_builder = self.http.get(&url);
 
-        let resp = self.http.get(&url).send().await?;
+        let req_builder = if let Some(q) = query {
+            req_builder.query(q)
+        } else {
+            req_builder
+        };
+
+        let resp = req_builder.send().await?;
+        log::info!("Called GET with path: {}", path);
 
         match resp.status() {
             StatusCode::FORBIDDEN | StatusCode::UNAUTHORIZED => {
@@ -149,11 +184,11 @@ impl Client {
                 {
                     return Err(Error::Auth(format!("forbidden after re-auth: {url}")));
                 }
-                log::debug!("Re auth worked and response was OK");
+                log::info!("Re auth worked and response was OK");
                 Ok(resp)
             }
             _ => {
-                log::debug!("Response was ok");
+                log::info!("Response was ok");
                 Ok(resp)
             }
         }
@@ -165,9 +200,91 @@ impl Client {
 
     pub(crate) async fn get_torrents(&self) -> Result<Vec<Torrent>, Error> {
         Ok(self
-            .get("/api/v2/torrents/info?sort=added_on&reverse=true")
+            .get(
+                "/api/v2/torrents/info?sort=added_on&reverse=true",
+                None::<&()>,
+            )
             .await?
             .json::<Vec<Torrent>>()
             .await?)
+    }
+
+    async fn get_torrent_by_hash(&self, hash: impl Into<String>) -> Result<Torrent, Error> {
+        let hash = hash.into();
+
+        let torrents = self
+            .get("/api/v2/torrents/info", Some(&[("hashes", &hash)]))
+            .await?
+            .json::<Vec<Torrent>>()
+            .await?;
+
+        match torrents.first() {
+            Some(t) => Ok(t.to_owned()),
+            None => Err(Error::TorrentRemoved(hash)),
+        }
+    }
+
+    pub(crate) async fn queue_torrent(
+        &self,
+        torrent_bytes: Vec<u8>,
+    ) -> Result<TorrentPostResponse, Error> {
+        self.ensure_logged_in().await?;
+
+        let url = format!("{}{}", self.base_url, "/api/v2/torrents/add");
+        let part = multipart::Part::bytes(torrent_bytes)
+            .file_name("torrent.torrent")
+            .mime_str("application/x-bittorrent")?;
+
+        let form = multipart::Form::new()
+            .part("torrents", part)
+            .text("paused", "false");
+
+        let form = if let Some(sp) = &self.save_path {
+            form.text("savepath", sp.to_string())
+        } else {
+            form
+        };
+
+        let res = self
+            .http
+            .post(url)
+            .header("Referer", &self.base_url)
+            .multipart(form)
+            .send()
+            .await?
+            .error_for_status()?
+            .json::<TorrentPostResponse>()
+            .await?;
+
+        if res.success_count == 0 || res.added_torrent_ids.is_empty() {
+            return Err(Error::Request(format!(
+                "qbittorrent did not add the torrent (success_count={}, failure_count={})",
+                res.success_count, res.failure_count
+            )));
+        }
+
+        Ok(res)
+    }
+
+    pub(crate) fn track_torrent(
+        &self,
+        hash: impl Into<String>,
+    ) -> impl Sipper<Result<Torrent, Error>, (String, f32)> + 'static {
+        let client = self.clone();
+        let hash = hash.into();
+
+        sipper(move |mut sender| async move {
+            loop {
+                match client.get_torrent_by_hash(&hash).await {
+                    Ok(t) if t.progress >= 1.0 => return Ok(t),
+                    Ok(t) => {
+                        sender.send((t.name, t.progress)).await;
+                    }
+                    Err(e @ Error::TorrentRemoved(_)) => return Err(e),
+                    Err(e) => debug!("{e}"),
+                }
+                sleep(Duration::from_secs(1)).await;
+            }
+        })
     }
 }

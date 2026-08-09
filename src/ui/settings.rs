@@ -1,13 +1,15 @@
-use iced::Length::{Fill, FillPortion};
-use iced::Theme;
-use iced::widget::{button, column, pick_list, row, space, text, text_input};
-use iced::{Alignment, Element, Task};
-use iced_fonts::lucide::separator_horizontal;
-
 use crate::config::Config;
+use iced::Length::{Fill, FillPortion};
+use iced::widget::{Text, button, column, pick_list, row, space, text, text_input};
+use iced::{Alignment, Element, Task};
+use iced::{Color, Theme};
+use iced_fonts::lucide::{folder, separator_horizontal};
+use std::fs;
+use std::path::{Path, PathBuf};
 
 pub(crate) struct Settings {
     pub(crate) config: Config,
+    is_path_valid: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -17,6 +19,9 @@ pub(crate) enum SettingsMessage {
     UrlChanged(String),
     PassChanged(String),
     UsernameChanged(String),
+    SavePathChanged(String),
+    PickSavePath,
+    SavePathPicked(Option<PathBuf>),
 }
 
 pub(crate) enum Action {
@@ -26,10 +31,19 @@ pub(crate) enum Action {
 
 impl Settings {
     pub(crate) fn new(config: Config) -> Self {
-        Self { config }
+        Self {
+            config,
+            is_path_valid: true,
+        }
     }
 
-    pub(crate) fn view<'a>(&self) -> Element<'_, SettingsMessage> {
+    pub(crate) fn view(&self) -> Element<'_, SettingsMessage> {
+        let validty_message: Text<'_, iced::Theme> = if self.is_path_valid {
+            text("Valid path").color(Color::from_rgba(0.0, 1.0, 0.0, 1.0))
+        } else {
+            text("Invalid Path").color(Color::from_rgba(1.0, 0.0, 0.0, 1.0))
+        };
+
         column![
             text("Config").size(48),
             separator_horizontal().width(Fill),
@@ -67,6 +81,21 @@ impl Settings {
                     .width(FillPortion(1))
                     .on_input(SettingsMessage::PassChanged)
             ],
+            row![
+                text("qBittorrent Save Path:")
+                    .width(FillPortion(3))
+                    .align_y(Alignment::Center),
+                column![
+                    row![
+                        text_input("~/Downloads", &self.config.qtor_save_path)
+                            .width(FillPortion(1))
+                            .on_input(SettingsMessage::SavePathChanged),
+                        space().width(2),
+                        button(folder()).on_press(SettingsMessage::PickSavePath)
+                    ],
+                    validty_message.size(10)
+                ]
+            ],
             space().height(Fill),
             row![
                 space().width(Fill),
@@ -102,10 +131,59 @@ impl Settings {
 
                 Action::None
             }
+
+            SettingsMessage::SavePathChanged(path) => {
+                self.config.qtor_save_path = path.clone();
+                self.is_path_valid = is_writable_dir(&path);
+
+                Action::None
+            }
+
+            SettingsMessage::PickSavePath => {
+                let start = self.config.qtor_save_path.clone();
+                Action::Run(Task::perform(
+                    pick_folder(start),
+                    SettingsMessage::SavePathPicked,
+                ))
+            }
+
+            SettingsMessage::SavePathPicked(None) => Action::None,
+            SettingsMessage::SavePathPicked(Some(path)) => {
+                self.config.qtor_save_path = path.display().to_string();
+                self.is_path_valid = is_writable_dir(&self.config.qtor_save_path);
+
+                Action::None
+            }
+
             SettingsMessage::UpdatedConfig => {
                 *new_config = self.config.clone();
                 Action::None
             }
         }
+    }
+}
+
+async fn pick_folder(start: String) -> Option<PathBuf> {
+    rfd::AsyncFileDialog::new()
+        .set_title("Choose save location")
+        .set_directory(if start.is_empty() { "~".into() } else { start })
+        .pick_folder()
+        .await
+        .map(|h| h.path().to_path_buf())
+}
+
+fn is_writable_dir<P: AsRef<Path>>(path: P) -> bool {
+    let path = path.as_ref();
+    if !path.is_dir() {
+        return false;
+    }
+
+    let probe = path.join(format!(".write_test_{}", std::process::id()));
+    match fs::File::create(&probe) {
+        Ok(_) => {
+            let _ = fs::remove_file(&probe);
+            true
+        }
+        Err(_) => false,
     }
 }

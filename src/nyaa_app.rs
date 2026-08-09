@@ -226,7 +226,7 @@ impl NyaaAppState {
                 };
                 match library.update(library_message, &self.qbt_client) {
                     library::Action::None => Task::none(),
-                    library::Action::Run(task) => task.map(NyaaMessage::Library),
+                    library::Action::Task(task) => task.map(NyaaMessage::Library),
                     library::Action::OpenPath(path) => {
                         if let Err(e) = open::that(path) {
                             match e.kind() {
@@ -250,7 +250,7 @@ impl NyaaAppState {
                         Task::none()
                     }
                     search::Action::None => Task::none(),
-                    search::Action::Run(task) => task.map(NyaaMessage::Search),
+                    search::Action::Task(task) => task.map(NyaaMessage::Search),
                     search::Action::AddToQbt(nyaa_combo) => {
                         self.pending_download = Some(nyaa_combo);
                         self.active_modal =

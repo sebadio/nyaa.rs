@@ -11,7 +11,7 @@ use thiserror::Error;
 
 pub(crate) enum Action {
     None,
-    Run(Task<NyaaSearchMessage>),
+    Task(Task<NyaaSearchMessage>),
     AddToQbt(NyaaItemBytes),
     ShowError(SearchViewError),
 }
@@ -129,7 +129,7 @@ impl Search {
                     .set_category(self.category)
                     .set_filter(self.filter);
 
-                Action::Run(Task::perform(
+                Action::Task(Task::perform(
                     async move { client.fetch(Some(request)).await },
                     NyaaSearchMessage::SearchResults,
                 ))
@@ -164,7 +164,7 @@ impl Search {
 
             NyaaSearchMessage::DownloadTorrent(item) => {
                 let client = nyaa_client.clone();
-                Action::Run(Task::perform(
+                Action::Task(Task::perform(
                     async move { client.download_torrent(item).await },
                     NyaaSearchMessage::DownloadFinished,
                 ))

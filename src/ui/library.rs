@@ -25,7 +25,7 @@ pub(crate) enum LibraryMessage {
 
 pub(crate) enum Action {
     None,
-    Run(Task<LibraryMessage>),
+    Task(Task<LibraryMessage>),
     OpenPath(String),
 }
 
@@ -45,7 +45,7 @@ impl Library {
             }
             LibraryMessage::Load => {
                 let qbt = client.clone();
-                Action::Run(Task::perform(
+                Action::Task(Task::perform(
                     async move { qbt.get_torrents().await },
                     LibraryMessage::Loaded,
                 ))

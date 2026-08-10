@@ -1,4 +1,7 @@
-remove torrent from library
+Revamp Downloads
+  - rename current library view to "Downloads"
+  - Allow actions to be done, for example removing a torrent from qbt and disk
+  - fix currently missing files (erased by the user not on qbt but disk) still appear on the list
 persist search and library state when going from one to another
 create custom styles for button and such
 create popups for app messages/errors

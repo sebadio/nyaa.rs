@@ -5,17 +5,16 @@ use crate::ui::widgets::modals::{self, modal, post_download};
 use crate::ui::widgets::{sidebar, status_bar, titlebar};
 use crate::ui::{Library, library};
 use crate::ui::{Search, search};
+use crate::util::track_torrent;
 use iced::Length::Fill;
-use iced::task::{Sipper, sipper};
 use iced::time::{self, Duration};
 use iced::widget::{column, row};
 use iced::{Element, Subscription, Task, Theme, window};
 use log::{error, info};
 use nyaa::NyaaAdapter;
 use nyaa::adapter::NyaaItemBytes;
-use qbittorrent::{self, Client, Error, Torrent, TorrentPostResponse};
+use qbittorrent::{self, Client, Torrent, TorrentPostResponse};
 use std::io::ErrorKind;
-use tokio::time::sleep;
 
 pub(crate) enum NyaaView {
     NyaaSearch(Search),
@@ -352,26 +351,4 @@ impl NyaaAppState {
             _ => Subscription::none(),
         }
     }
-}
-
-pub fn track_torrent(
-    client: &Client,
-    hash: String,
-) -> impl Sipper<Result<Torrent, qbittorrent::Error>, (String, f32)> + 'static {
-    let client = client.clone();
-
-    sipper(move |mut sender| async move {
-        loop {
-            match client.get_torrent_by_hash(&hash).await {
-                Ok(t) if t.progress >= 1.0 => return Ok(t),
-                Ok(t) => {
-                    sender.send((t.name, t.progress)).await;
-                }
-                Err(e @ Error::TorrentNotFound(_)) => return Err(e),
-                Err(e) => error!("{e}"),
-            }
-
-            sleep(Duration::from_secs(1)).await;
-        }
-    })
 }

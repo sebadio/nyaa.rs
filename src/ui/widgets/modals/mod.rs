@@ -2,33 +2,33 @@ use iced::{
     Color, Element, Task, Theme,
     widget::{center, container, mouse_area, opaque, text},
 };
-pub(crate) mod post_download;
+pub(crate) mod download;
 pub(crate) mod save_settings;
 use log::info;
 
 pub(crate) enum Modal {
-    PostDownload(post_download::Modal),
+    Download(download::Modal),
     SaveSettingsModal(save_settings::Modal),
 }
 
 #[derive(Debug, Clone)]
 pub(crate) enum Message {
     Cancel,
-    PostDownload(post_download::Message),
+    PostDownload(download::Message),
     SaveSettings(save_settings::Message),
 }
 
 pub(crate) enum Event {
     CloseModal,
     PostModalCancel,
-    PostDownloadSubmit(post_download::Options),
+    PostDownloadSubmit(download::Options),
     SaveSettingsDecision(bool),
 }
 
 impl Modal {
     pub(crate) fn view(&self) -> Element<'_, Message> {
         match self {
-            Self::PostDownload(modal) => modal.view().map(Message::PostDownload),
+            Self::Download(modal) => modal.view().map(Message::PostDownload),
             Self::SaveSettingsModal(_modal) => text!("Next update?").into(),
         }
     }
@@ -38,22 +38,22 @@ impl Modal {
             // I can match the cancel based on the current modal if we need to send a custom event on modal close
             // just need to add another arm and return the custom event
             Message::Cancel => match self {
-                Self::PostDownload(_) => (Task::none(), Some(Event::PostModalCancel)),
+                Self::Download(_) => (Task::none(), Some(Event::PostModalCancel)),
                 _ => (Task::none(), Some(Event::CloseModal)),
             },
 
             Message::PostDownload(message) => {
-                let Modal::PostDownload(modal) = self else {
+                let Modal::Download(modal) = self else {
                     return (Task::none(), None);
                 };
 
                 match modal.update(message) {
-                    post_download::Action::Cancel => {
+                    download::Action::Cancel => {
                         info!("Canceled modal");
                         (Task::none(), Some(Event::PostModalCancel))
                     }
-                    post_download::Action::None => (Task::none(), None),
-                    post_download::Action::Submit(options) => {
+                    download::Action::None => (Task::none(), None),
+                    download::Action::Submit(options) => {
                         (Task::none(), Some(Event::PostDownloadSubmit(options)))
                     }
                 }

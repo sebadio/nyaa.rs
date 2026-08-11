@@ -1,7 +1,7 @@
 use crate::config::Config;
 use crate::ui::main_view;
 use crate::ui::settings::{self, Settings};
-use crate::ui::widgets::modals::{self, modal, post_download};
+use crate::ui::widgets::modals::{self, download, modal};
 use crate::ui::widgets::{Toast, ToastId, ToastKind, sidebar, status_bar, titlebar};
 use crate::ui::{Library, library};
 use crate::ui::{Search, search};
@@ -13,6 +13,7 @@ use iced::widget::{Stack, column, container, row};
 use iced::{Element, Subscription, Task, Theme, window};
 use log::{error, info};
 use nyaa::NyaaAdapter;
+use nyaa::NyaaAdapterError;
 use nyaa::adapter::NyaaItemBytes;
 use qbittorrent::{self, Client, Torrent, TorrentPostResponse};
 use std::io::ErrorKind;
@@ -69,6 +70,10 @@ pub(crate) enum NyaaMessage {
         progress: f32,
     },
     DownloadFinished(Result<Torrent, qbittorrent::Error>),
+    TorrentDownloaded {
+        options: download::Options,
+        result: Result<NyaaItemBytes, NyaaAdapterError>,
+    },
     Modal(modals::Message),
 }
 
@@ -85,7 +90,6 @@ pub(crate) struct NyaaAppState {
     config: Config,
     active_download: Option<ActiveDownload>,
     active_modal: Option<modals::Modal>,
-    pending_download: Option<NyaaItemBytes>,
     notifications: Vec<Toast>,
 }
 
@@ -108,7 +112,6 @@ impl NyaaAppState {
             config,
             active_download: None,
             active_modal: None,
-            pending_download: None,
             notifications: Vec::new(),
         }
     }
@@ -175,31 +178,17 @@ impl NyaaAppState {
 
                         modals::Event::PostModalCancel => {
                             self.active_modal = None;
-                            self.pending_download = None
                         }
                         modals::Event::PostDownloadSubmit(options) => {
-                            self.active_modal = None;
-
-                            let Some(nyaa_combo) = self.pending_download.take() else {
+                            let Some(modals::Modal::Download(modal)) = self.active_modal.take()
+                            else {
                                 return Task::none();
                             };
 
-                            self.active_download = Some(ActiveDownload {
-                                name: nyaa_combo.item.title,
-                                progress: 0.0,
-                                open_on_finish: options.open_on_finish,
-                            });
-
-                            let client = self.qbt_client.clone();
+                            let client = self.nyaa_adapter.clone();
                             return Task::perform(
-                                async move { client.queue_torrent(nyaa_combo.bytes).await },
-                                move |result| match result {
-                                    Ok(post) => NyaaMessage::TorrentQueued(post),
-                                    Err(error) => NyaaMessage::TorrentAddFailed {
-                                        error,
-                                        original_hash: nyaa_combo.item.info_hash,
-                                    },
-                                },
+                                async move { client.download_torrent(modal.item).await },
+                                move |result| NyaaMessage::TorrentDownloaded { options, result },
                             );
                         }
 
@@ -297,19 +286,52 @@ impl NyaaAppState {
                     }
                     search::Action::None => Task::none(),
                     search::Action::Task(task) => task.map(NyaaMessage::Search),
-                    search::Action::AddToQbt(nyaa_combo) => {
-                        let title = nyaa_combo.item.title.clone();
-                        self.pending_download = Some(nyaa_combo);
+                    search::Action::OpenPostDownload(item) => {
                         self.active_modal =
-                            Some(modals::Modal::PostDownload(post_download::Modal::new()));
-                        let toast = Toast::new()
-                            .set_title("Starting Download")
-                            .set_message(title)
-                            .set_kind(ToastKind::Info);
-                        Task::done(NyaaMessage::AddToast(toast))
+                            Some(modals::Modal::Download(download::Modal::new(item)));
+                        Task::none()
                     }
                 }
             }
+
+            NyaaMessage::TorrentDownloaded { options, result } => match result {
+                Ok(nyaa_combo) => {
+                    let title = nyaa_combo.item.title.clone();
+                    self.active_download = Some(ActiveDownload {
+                        name: nyaa_combo.item.title,
+                        progress: 0.0,
+                        open_on_finish: options.open_on_finish,
+                    });
+
+                    let client = self.qbt_client.clone();
+                    let queue_task = Task::perform(
+                        async move { client.queue_torrent(nyaa_combo.bytes).await },
+                        move |result| match result {
+                            Ok(post) => NyaaMessage::TorrentQueued(post),
+                            Err(error) => NyaaMessage::TorrentAddFailed {
+                                error,
+                                original_hash: nyaa_combo.item.info_hash,
+                            },
+                        },
+                    );
+
+                    let toast = Toast::new()
+                        .set_title("Starting Download")
+                        .set_message(title)
+                        .set_kind(ToastKind::Info);
+
+                    Task::batch([Task::done(NyaaMessage::AddToast(toast)), queue_task])
+                }
+                Err(e) => {
+                    error!("Failed to download torrent: {}", e);
+                    Task::done(NyaaMessage::AddToast(Toast {
+                        title: "Error".to_string(),
+                        message: format!("Failed to download torrent: {}", e),
+                        kind: ToastKind::Error,
+                        ..Toast::default()
+                    }))
+                }
+            },
 
             NyaaMessage::TorrentQueued(res) => {
                 let hash = res
@@ -349,7 +371,6 @@ impl NyaaAppState {
                 other => {
                     error!("queue failed: {other}");
                     self.active_download = None;
-                    self.pending_download = None;
                     Task::done(NyaaMessage::AddToast(Toast {
                         title: "Error".to_string(),
                         message: format!("Failed to queue requested torrent: {}", other),

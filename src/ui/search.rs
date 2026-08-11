@@ -3,7 +3,6 @@ use iced::widget::{Text, button, column, pick_list, row, scrollable, space, text
 use iced::{Alignment, Element, Task, Theme};
 use iced_fonts::lucide::search;
 use log::{error, info};
-use nyaa::adapter::NyaaItemBytes;
 use nyaa::filter::NyaaFilter;
 use nyaa::request::NyaaRequest;
 use nyaa::{NyaaAdapter, NyaaAdapterError, NyaaCategory, NyaaItem};
@@ -12,7 +11,7 @@ use thiserror::Error;
 pub(crate) enum Action {
     None,
     Task(Task<NyaaSearchMessage>),
-    AddToQbt(NyaaItemBytes),
+    OpenPostDownload(NyaaItem),
     ShowError(SearchViewError),
 }
 
@@ -24,7 +23,6 @@ pub(crate) enum NyaaSearchMessage {
     FilterUpdated(NyaaFilter),
     SearchResults(Result<Vec<NyaaItem>, NyaaAdapterError>),
     DownloadTorrent(NyaaItem),
-    DownloadFinished(NyaaItem, Result<NyaaItemBytes, NyaaAdapterError>),
 }
 
 // FIX: route these to the main state and handle once popups/messages are done
@@ -32,9 +30,6 @@ pub(crate) enum NyaaSearchMessage {
 pub(crate) enum SearchViewError {
     #[error("Search failed: {0}")]
     FailedSearch(String),
-
-    #[error("Download failed: {0}")]
-    FailedDownload(String),
 }
 
 #[derive(Debug)]
@@ -165,25 +160,7 @@ impl Search {
                 }
             }
 
-            NyaaSearchMessage::DownloadTorrent(item) => {
-                let client = nyaa_client.clone();
-                let value = item.clone();
-                Action::Task(Task::perform(
-                    async move { client.download_torrent(value).await },
-                    move |res| NyaaSearchMessage::DownloadFinished(item, res),
-                ))
-            }
-
-            NyaaSearchMessage::DownloadFinished(item, bytes) => match bytes {
-                Ok(bytes) => Action::AddToQbt(bytes),
-                Err(e) => {
-                    error!("Failed to download torrent {}: {}", item.title, e);
-                    Action::ShowError(SearchViewError::FailedDownload(format!(
-                        "Failed to download torrent {}: {}",
-                        item.title, e
-                    )))
-                }
-            },
+            NyaaSearchMessage::DownloadTorrent(item) => Action::OpenPostDownload(item),
         }
     }
 

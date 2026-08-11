@@ -63,29 +63,25 @@ impl Modal {
 }
 
 pub(crate) fn modal<'a, Message>(
-    base: impl Into<Element<'a, Message>>,
     content: impl Into<Element<'a, Message>>,
     on_blur: Message,
 ) -> Element<'a, Message>
 where
     Message: Clone + 'a,
 {
-    stack![
-        base.into(),
-        opaque(
-            mouse_area(
-                center(opaque(
-                    container(content)
-                        .height(500)
-                        .width(500)
-                        .padding(24)
-                        .style(modal_container_style)
-                ))
-                .style(modal_container_backdrop_style)
-            )
-            .on_press(on_blur)
+    opaque(
+        mouse_area(
+            center(opaque(
+                container(content)
+                    .height(500)
+                    .width(500)
+                    .padding(24)
+                    .style(modal_container_style),
+            ))
+            .style(modal_container_backdrop_style),
         )
-    ]
+        .on_press(on_blur),
+    )
     .into()
 }
 

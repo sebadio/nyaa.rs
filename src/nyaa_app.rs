@@ -8,7 +8,7 @@ use crate::ui::{Search, search};
 use crate::util::track_torrent;
 use iced::Length::Fill;
 use iced::time::{self, Duration};
-use iced::widget::{column, row};
+use iced::widget::{Stack, column, row};
 use iced::{Element, Subscription, Task, Theme, window};
 use log::{error, info};
 use nyaa::NyaaAdapter;
@@ -116,15 +116,16 @@ impl NyaaAppState {
             self.active_download.as_ref().map(status_bar)
         ];
 
+        let mut layers = vec![content.into()];
         if let Some(active_modal) = &self.active_modal {
-            modal(
-                content,
+            let md = modal(
                 active_modal.view().map(NyaaMessage::Modal),
                 NyaaMessage::Modal(modals::Message::Cancel),
-            )
-        } else {
-            content.into()
+            );
+            layers.push(md);
         }
+
+        Stack::from_vec(layers).height(Fill).width(Fill).into()
     }
 
     pub(crate) fn update(&mut self, message: NyaaMessage) -> Task<NyaaMessage> {

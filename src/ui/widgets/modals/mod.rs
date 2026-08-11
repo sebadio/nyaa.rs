@@ -1,6 +1,6 @@
 use iced::{
     Color, Element, Task, Theme,
-    widget::{center, container, mouse_area, opaque, stack, text},
+    widget::{center, container, mouse_area, opaque, text},
 };
 pub(crate) mod post_download;
 pub(crate) mod save_settings;

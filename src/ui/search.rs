@@ -24,7 +24,7 @@ pub(crate) enum NyaaSearchMessage {
     FilterUpdated(NyaaFilter),
     SearchResults(Result<Vec<NyaaItem>, NyaaAdapterError>),
     DownloadTorrent(NyaaItem),
-    DownloadFinished(Result<NyaaItemBytes, NyaaAdapterError>),
+    DownloadFinished(NyaaItem, Result<NyaaItemBytes, NyaaAdapterError>),
 }
 
 // FIX: route these to the main state and handle once popups/messages are done
@@ -157,24 +157,31 @@ impl Search {
                     }
                     Err(e) => {
                         error!("Search failed: {e}");
-                        Action::ShowError(SearchViewError::FailedSearch(e.to_string()))
+                        Action::ShowError(SearchViewError::FailedSearch(format!(
+                            "Search has failed! {}",
+                            e
+                        )))
                     }
                 }
             }
 
             NyaaSearchMessage::DownloadTorrent(item) => {
                 let client = nyaa_client.clone();
+                let value = item.clone();
                 Action::Task(Task::perform(
-                    async move { client.download_torrent(item).await },
-                    NyaaSearchMessage::DownloadFinished,
+                    async move { client.download_torrent(value).await },
+                    move |res| NyaaSearchMessage::DownloadFinished(item, res),
                 ))
             }
 
-            NyaaSearchMessage::DownloadFinished(bytes) => match bytes {
+            NyaaSearchMessage::DownloadFinished(item, bytes) => match bytes {
                 Ok(bytes) => Action::AddToQbt(bytes),
                 Err(e) => {
-                    error!("Failed to download torrent: {}", e);
-                    Action::ShowError(SearchViewError::FailedDownload(e.to_string()))
+                    error!("Failed to download torrent {}: {}", item.title, e);
+                    Action::ShowError(SearchViewError::FailedDownload(format!(
+                        "Failed to download torrent {}: {}",
+                        item.title, e
+                    )))
                 }
             },
         }

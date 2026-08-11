@@ -2,13 +2,14 @@ use crate::config::Config;
 use crate::ui::main_view;
 use crate::ui::settings::{self, Settings};
 use crate::ui::widgets::modals::{self, modal, post_download};
-use crate::ui::widgets::{sidebar, status_bar, titlebar};
+use crate::ui::widgets::{Toast, ToastId, ToastKind, sidebar, status_bar, titlebar};
 use crate::ui::{Library, library};
 use crate::ui::{Search, search};
 use crate::util::track_torrent;
 use iced::Length::Fill;
+use iced::time::Instant;
 use iced::time::{self, Duration};
-use iced::widget::{Stack, column, row};
+use iced::widget::{Stack, column, container, row};
 use iced::{Element, Subscription, Task, Theme, window};
 use log::{error, info};
 use nyaa::NyaaAdapter;
@@ -51,11 +52,14 @@ pub(crate) enum NyaaMessage {
     ToggleWindowMode,
     Minimize,
     Drag,
+    Tick,
     Navigate(ScreenKind),
     Search(search::NyaaSearchMessage),
     Library(library::LibraryMessage),
     Settings(settings::SettingsMessage),
     TorrentQueued(TorrentPostResponse),
+    DismissToast(ToastId),
+    AddToast(Toast),
     TorrentAddFailed {
         error: qbittorrent::Error,
         original_hash: String,
@@ -82,6 +86,7 @@ pub(crate) struct NyaaAppState {
     active_download: Option<ActiveDownload>,
     active_modal: Option<modals::Modal>,
     pending_download: Option<NyaaItemBytes>,
+    notifications: Vec<Toast>,
 }
 
 impl NyaaAppState {
@@ -104,6 +109,7 @@ impl NyaaAppState {
             active_download: None,
             active_modal: None,
             pending_download: None,
+            notifications: Vec::new(),
         }
     }
 
@@ -118,18 +124,42 @@ impl NyaaAppState {
 
         let mut layers = vec![content.into()];
         if let Some(active_modal) = &self.active_modal {
-            let md = modal(
+            layers.push(modal(
                 active_modal.view().map(NyaaMessage::Modal),
                 NyaaMessage::Modal(modals::Message::Cancel),
-            );
-            layers.push(md);
+            ));
         }
+
+        let notifications =
+            container(column(self.notifications.iter().map(Toast::view)).spacing(8))
+                .align_right(Fill)
+                .align_top(Fill)
+                .padding(16);
+
+        layers.push(notifications.into());
 
         Stack::from_vec(layers).height(Fill).width(Fill).into()
     }
 
     pub(crate) fn update(&mut self, message: NyaaMessage) -> Task<NyaaMessage> {
         match message {
+            NyaaMessage::Tick => {
+                let now = Instant::now();
+                self.notifications
+                    .retain(|t| now.duration_since(t.created_at) < t.lifetime());
+                Task::none()
+            }
+
+            NyaaMessage::AddToast(toast) => {
+                self.notifications.push(toast);
+                Task::none()
+            }
+
+            NyaaMessage::DismissToast(id) => {
+                self.notifications.retain(|t| t.id.ne(&id));
+                Task::none()
+            }
+
             NyaaMessage::Modal(message) => {
                 let Some(active_modal) = &mut self.active_modal else {
                     return Task::none();
@@ -210,9 +240,8 @@ impl NyaaAppState {
                     settings::Action::None => Task::none(),
                     settings::Action::Task(task) => task.map(NyaaMessage::Settings),
                     settings::Action::ApplyConfig => {
-                        self.rebuild_qbt_client();
                         self.persist_config();
-                        Task::none()
+                        self.rebuild_qbt_client()
                     }
                 }
             }
@@ -228,11 +257,23 @@ impl NyaaAppState {
                     library::Action::None => Task::none(),
                     library::Action::Task(task) => task.map(NyaaMessage::Library),
                     library::Action::OpenPath(path) => {
-                        if let Err(e) = open::that(path) {
-                            match e.kind() {
-                                ErrorKind::NotFound => log::error!("File doesn't exist"),
-                                _ => log::error!("{}", e.kind()),
-                            }
+                        if let Err(e) = open::that_detached(path) {
+                            let toast = Toast::new()
+                                .set_title("Failed to open")
+                                .set_kind(ToastKind::Error);
+
+                            let toast = match e.kind() {
+                                ErrorKind::NotFound => {
+                                    error!("File doesn't exist");
+                                    toast.set_message("Does the file exist?")
+                                }
+                                _ => {
+                                    error!("{}", e.kind());
+                                    toast.set_message(format!("{}", e.kind()))
+                                }
+                            };
+
+                            return Task::done(NyaaMessage::AddToast(toast));
                         }
                         Task::none()
                     }
@@ -247,15 +288,25 @@ impl NyaaAppState {
                 match search.update(search_message, &self.nyaa_adapter) {
                     search::Action::ShowError(e) => {
                         error!("{}", e);
-                        Task::none()
+                        Task::done(NyaaMessage::AddToast(Toast {
+                            title: "Error".to_string(),
+                            message: e.to_string(),
+                            kind: ToastKind::Error,
+                            ..Toast::default()
+                        }))
                     }
                     search::Action::None => Task::none(),
                     search::Action::Task(task) => task.map(NyaaMessage::Search),
                     search::Action::AddToQbt(nyaa_combo) => {
+                        let title = nyaa_combo.item.title.clone();
                         self.pending_download = Some(nyaa_combo);
                         self.active_modal =
                             Some(modals::Modal::PostDownload(post_download::Modal::new()));
-                        Task::none()
+                        let toast = Toast::new()
+                            .set_title("Starting Download")
+                            .set_message(title)
+                            .set_kind(ToastKind::Info);
+                        Task::done(NyaaMessage::AddToast(toast))
                     }
                 }
             }
@@ -279,18 +330,32 @@ impl NyaaAppState {
                 original_hash,
             } => match error {
                 qbittorrent::Error::AlreadyExists() => {
-                    info!("Torrent already in qBittorrent — tracking existing one");
-                    Task::sip(
+                    let msg = "Torrent already in qBittorrent - tracking existing one".to_string();
+                    info!("{}", msg);
+
+                    let toast = Toast::new()
+                        .set_title("Tracking existing torrent")
+                        .set_message(msg)
+                        .set_kind(ToastKind::Info);
+
+                    let sip_task = Task::sip(
                         track_torrent(&self.qbt_client, original_hash),
                         |(name, progress)| NyaaMessage::DownloadProgress { name, progress },
                         NyaaMessage::DownloadFinished,
-                    )
+                    );
+
+                    Task::batch([Task::done(NyaaMessage::AddToast(toast)), sip_task])
                 }
                 other => {
                     error!("queue failed: {other}");
                     self.active_download = None;
                     self.pending_download = None;
-                    Task::none()
+                    Task::done(NyaaMessage::AddToast(Toast {
+                        title: "Error".to_string(),
+                        message: format!("Failed to queue requested torrent: {}", other),
+                        kind: ToastKind::Error,
+                        ..Toast::default()
+                    }))
                 }
             },
 
@@ -311,22 +376,40 @@ impl NyaaAppState {
                         }
                     }
                     (Ok(_), _) => {}
-                    (Err(e), _) => error!("tracking failed: {e}"),
+                    (Err(e), _) => {
+                        error!("tracking failed: {e}");
+                        return Task::done(NyaaMessage::AddToast(Toast {
+                            title: "Error tracking".to_string(),
+                            message: format!("Tracking failed for torrent {}", e),
+                            kind: ToastKind::Error,
+                            ..Toast::default()
+                        }));
+                    }
                 }
                 Task::none()
             }
         }
     }
 
-    fn rebuild_qbt_client(&mut self) {
+    fn rebuild_qbt_client(&mut self) -> Task<NyaaMessage> {
         match Client::new(
             &self.config.qtor_url,
             &self.config.qtor_username,
             &self.config.qtor_pass,
             Some(&self.config.qtor_save_path),
         ) {
-            Ok(client) => self.qbt_client = client,
-            Err(e) => error!("qbittorrent client rebuild failed: {e}"),
+            Ok(client) => {
+                self.qbt_client = client;
+                Task::none()
+            }
+            Err(e) => {
+                error!("qbittorrent client rebuild failed: {e}");
+                let toast = Toast::new()
+                    .set_title("qBittorrent connection error")
+                    .set_message(format!("Error connecting to qBittorrent {}", e))
+                    .set_kind(ToastKind::Error);
+                Task::done(NyaaMessage::AddToast(toast))
+            }
         }
     }
 
@@ -344,12 +427,15 @@ impl NyaaAppState {
     }
 
     pub(crate) fn subscription(&self) -> Subscription<NyaaMessage> {
-        match &self.current_view {
-            NyaaView::QtorLibrary(_) if self.qbt_client.is_logged_in() => {
+        let mut suscriptions = vec![time::every(Duration::from_secs(1)).map(|_| NyaaMessage::Tick)];
+
+        if matches!(self.current_view, NyaaView::QtorLibrary(_)) && self.qbt_client.is_logged_in() {
+            suscriptions.push(
                 time::every(Duration::from_secs(2))
-                    .map(|_| NyaaMessage::Library(library::LibraryMessage::Load))
-            }
-            _ => Subscription::none(),
+                    .map(|_| NyaaMessage::Library(library::LibraryMessage::Load)),
+            );
         }
+
+        Subscription::batch(suscriptions)
     }
 }

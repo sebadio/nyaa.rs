@@ -10,7 +10,7 @@ use iced::Length::Fill;
 use iced::time::Instant;
 use iced::time::{self, Duration};
 use iced::widget::{Stack, column, container, row};
-use iced::{Element, Subscription, Task, Theme, window};
+use iced::{Animation, Element, Subscription, Task, Theme, window};
 use log::{error, info};
 use nyaa::NyaaAdapter;
 use nyaa::NyaaAdapterError;
@@ -53,7 +53,9 @@ pub(crate) enum NyaaMessage {
     ToggleWindowMode,
     Minimize,
     Drag,
+    ToggleSidebar,
     Tick,
+    AnimationTick,
     Navigate(ScreenKind),
     Search(search::NyaaSearchMessage),
     Library(library::LibraryMessage),
@@ -91,6 +93,7 @@ pub(crate) struct NyaaAppState {
     active_download: Option<ActiveDownload>,
     active_modal: Option<modals::Modal>,
     notifications: Vec<Toast>,
+    sidebar_animation: Animation<bool>,
 }
 
 impl NyaaAppState {
@@ -113,15 +116,21 @@ impl NyaaAppState {
             active_download: None,
             active_modal: None,
             notifications: Vec::new(),
+            sidebar_animation: Animation::new(true).very_quick(),
         }
     }
 
     pub(crate) fn view(&self) -> Element<'_, NyaaMessage> {
         let content = column![
             self.config.uses_custom_titlebar.then(titlebar),
-            column![row![sidebar(), column![main_view(self)].width(Fill)].spacing(12),]
-                .padding(12)
-                .height(Fill),
+            column![
+                row![
+                    sidebar(&self.sidebar_animation, self.current_view.kind()),
+                    column![main_view(self)].width(Fill).padding(12)
+                ]
+                .spacing(12),
+            ]
+            .height(Fill),
             self.active_download.as_ref().map(status_bar)
         ];
 
@@ -153,6 +162,8 @@ impl NyaaAppState {
                 Task::none()
             }
 
+            NyaaMessage::AnimationTick => Task::none(),
+
             NyaaMessage::AddToast(toast) => {
                 self.notifications.push(toast);
                 Task::none()
@@ -160,6 +171,12 @@ impl NyaaAppState {
 
             NyaaMessage::DismissToast(id) => {
                 self.notifications.retain(|t| t.id.ne(&id));
+                Task::none()
+            }
+
+            NyaaMessage::ToggleSidebar => {
+                let expanded = !self.sidebar_animation.value();
+                self.sidebar_animation.go_mut(expanded, Instant::now());
                 Task::none()
             }
 
@@ -455,6 +472,10 @@ impl NyaaAppState {
                 time::every(Duration::from_secs(2))
                     .map(|_| NyaaMessage::Library(library::LibraryMessage::Load)),
             );
+        }
+
+        if self.sidebar_animation.is_animating(Instant::now()) {
+            suscriptions.push(window::frames().map(|_| NyaaMessage::AnimationTick));
         }
 
         Subscription::batch(suscriptions)

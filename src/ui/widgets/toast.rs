@@ -109,7 +109,6 @@ impl Toast {
             .height(120)
             .width(320),
         )
-        .into()
     }
 }
 
@@ -135,24 +134,24 @@ fn button_style(theme: &Theme, status: button::Status) -> button::Style {
             radius: Radius::from(4),
             ..Default::default()
         },
-        text_color: theme.extended_palette().primary.strong.color,
+        text_color: theme.palette().primary.strong.color,
         ..Default::default()
     }
 }
 
 fn container_style(theme: &Theme, kind: &ToastKind) -> container::Style {
     let bg = match kind {
-        ToastKind::Info => theme.extended_palette().primary.weak.color,
-        ToastKind::Success => theme.extended_palette().success.weak.color,
-        ToastKind::Warning => theme.extended_palette().warning.weak.color,
-        ToastKind::Error => theme.extended_palette().danger.weak.color,
+        ToastKind::Info => theme.palette().primary.weak.color,
+        ToastKind::Success => theme.palette().success.weak.color,
+        ToastKind::Warning => theme.palette().warning.weak.color,
+        ToastKind::Error => theme.palette().danger.weak.color,
     };
 
     let border_color = match kind {
-        ToastKind::Info => theme.extended_palette().primary.strong.color,
-        ToastKind::Success => theme.extended_palette().success.strong.color,
-        ToastKind::Warning => theme.extended_palette().warning.strong.color,
-        ToastKind::Error => theme.extended_palette().danger.strong.color,
+        ToastKind::Info => theme.palette().primary.strong.color,
+        ToastKind::Success => theme.palette().success.strong.color,
+        ToastKind::Warning => theme.palette().warning.strong.color,
+        ToastKind::Error => theme.palette().danger.strong.color,
     };
 
     container::Style {

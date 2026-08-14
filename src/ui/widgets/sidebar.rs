@@ -6,7 +6,7 @@ use iced::widget::image::Handle;
 use iced::widget::text::Wrapping;
 use iced::widget::{button, center, column, container, image, row, rule, space, text};
 use iced::{Alignment, Animation, Border};
-use iced::{Color, Element, Theme};
+use iced::{Element, Theme};
 use iced_fonts::lucide::{library, menu, search, settings};
 use std::sync::LazyLock;
 
@@ -53,7 +53,7 @@ pub(crate) fn sidebar<'a>(
     )
     .padding(12)
     .style(|theme: &Theme| container::Style {
-        background: Some(theme.extended_palette().background.weakest.color.into()),
+        background: Some(theme.palette().background.weakest.color.into()),
         ..Default::default()
     })
     .into()
@@ -125,7 +125,7 @@ fn nav_button<'a>(
 
 fn nav_button_style(is_selected: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
     move |theme, status| {
-        let palette = theme.extended_palette();
+        let palette = theme.palette();
 
         let (bg_color, text_color) = match (status, is_selected) {
             (button::Status::Pressed, _) => (

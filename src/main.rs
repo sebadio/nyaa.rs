@@ -24,7 +24,7 @@ fn main() -> iced::Result {
         NyaaAppState::update,
         NyaaAppState::view,
     )
-    .default_font(Font::with_name("Monocraft")) // FIX <- This is slowing down the startup
+    .default_font(Font::new("Monocraft")) // FIX <- This is slowing down the startup
     .decorations(decorations)
     .font(LUCIDE_FONT_BYTES)
     .theme(NyaaAppState::theme)

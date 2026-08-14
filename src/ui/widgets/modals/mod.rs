@@ -86,7 +86,7 @@ where
 }
 
 fn modal_container_style(theme: &Theme) -> container::Style {
-    let palette = theme.extended_palette();
+    let palette = theme.palette();
 
     container::Style {
         border: iced::Border {
@@ -100,7 +100,7 @@ fn modal_container_style(theme: &Theme) -> container::Style {
 }
 
 fn modal_container_backdrop_style(theme: &Theme) -> container::Style {
-    let black = theme.extended_palette().background.weakest.color;
+    let black = theme.palette().background.weakest.color;
 
     container::Style {
         background: Some(Color { a: 0.8, ..black }.into()),

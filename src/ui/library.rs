@@ -67,7 +67,7 @@ impl Library {
         }
     }
 
-    pub(crate) fn view<'a>(&self) -> Element<'a, LibraryMessage> {
+    pub(crate) fn view(&self) -> Element<'_, LibraryMessage> {
         let filtered_torrents = filter_library_torrents(&self.query, &self.torrents);
 
         let column_header_font = Font {
@@ -147,7 +147,7 @@ fn library_table_button(torrent: Torrent) -> Element<'static, LibraryMessage> {
     let hash = torrent.hash.clone();
     button(text(torrent.name).wrapping(Wrapping::WordOrGlyph))
         .style(|theme: &Theme, status| {
-            let palette = theme.extended_palette();
+            let palette = theme.palette();
             button::Style {
                 background: match status {
                     button::Status::Hovered => Some(palette.background.weak.color.into()),

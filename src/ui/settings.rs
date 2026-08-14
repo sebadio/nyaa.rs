@@ -52,17 +52,14 @@ impl Settings {
                 fill_mode: rule::FillMode::Full,
                 radius: Radius::default(),
                 snap: true,
-                color: theme.extended_palette().secondary.weak.color
+                color: theme.palette().secondary.weak.color
             }),
             row![
                 text("Theme:")
                     .width(FillPortion(3))
                     .align_y(Alignment::Center),
-                pick_list(
-                    Theme::ALL,
-                    self.config.theme.as_ref(),
-                    SettingsMessage::ThemeChanged
-                )
+                pick_list(self.config.theme.as_ref(), Theme::ALL, Theme::to_string)
+                    .on_select(SettingsMessage::ThemeChanged)
             ],
             row![
                 text("qBittorrent URL:")

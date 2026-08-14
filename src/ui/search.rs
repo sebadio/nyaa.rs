@@ -52,19 +52,17 @@ impl Search {
         }
     }
 
-    pub(crate) fn view<'a>(&self) -> Element<'a, NyaaSearchMessage> {
+    pub(crate) fn view(&self) -> Element<'_, NyaaSearchMessage> {
         let search_row = row![
-            pick_list(
-                NyaaFilter::ALL,
-                Some(self.filter),
-                NyaaSearchMessage::FilterUpdated
-            ),
+            pick_list(Some(self.filter), NyaaFilter::ALL, NyaaFilter::to_string)
+                .on_select(NyaaSearchMessage::FilterUpdated),
             space().width(12),
             pick_list(
-                NyaaCategory::ALL,
                 Some(self.category),
-                NyaaSearchMessage::CategoryUpdated
-            ),
+                NyaaCategory::ALL,
+                NyaaCategory::to_string
+            )
+            .on_select(NyaaSearchMessage::CategoryUpdated),
             space().width(12),
             text_input("Let's search nyaa!", &self.query)
                 .on_input(NyaaSearchMessage::QueryUpdated)
@@ -75,7 +73,7 @@ impl Search {
         ]
         .width(Fill);
 
-        let content: Element<'a, NyaaSearchMessage> = if self.results.is_empty() {
+        let content: Element<'_, NyaaSearchMessage> = if self.results.is_empty() {
             column![
                 text(if self.has_searched {
                     "No results"
@@ -175,7 +173,7 @@ impl Search {
         ])
         .on_press(NyaaSearchMessage::DownloadTorrent(item))
         .style(|theme: &Theme, status| {
-            let palette = theme.extended_palette();
+            let palette = theme.palette();
             button::Style {
                 background: match status {
                     button::Status::Hovered => Some(palette.background.base.color.into()),

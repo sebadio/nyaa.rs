@@ -65,7 +65,11 @@ fn sidebar_header<'a>(show_labels: bool) -> Element<'a, NyaaMessage> {
             .width(ICON_BUTTON_SIZE)
             .height(ICON_BUTTON_SIZE)
             .border_radius(10),
-        show_labels.then(|| text("Nyaa.rs").wrapping(Wrapping::None))
+        show_labels.then(|| text("Nyaa.rs")
+            .size(20)
+            .center()
+            .width(Fill)
+            .wrapping(Wrapping::None))
     ]
     .align_y(Alignment::Center)
     .spacing(8)
@@ -128,19 +132,19 @@ fn nav_button_style(is_selected: bool) -> impl Fn(&Theme, button::Status) -> but
         let palette = theme.palette();
 
         let (bg_color, text_color) = match (status, is_selected) {
-            (button::Status::Pressed, _) => (
+            (button::Status::Hovered | button::Status::Pressed, true) => (
                 palette.background.strong.color,
                 palette.background.base.text,
             ),
-            (button::Status::Hovered, true) => {
-                (palette.primary.strong.color, palette.primary.base.text)
-            }
             (button::Status::Hovered, false) => (
                 palette.background.neutral.color,
                 palette.background.base.text,
             ),
-            (_, true) => (palette.primary.base.color, palette.primary.base.text),
-            (_, false) => (palette.background.base.color, palette.background.base.text),
+            (_, true) => (palette.background.base.color, palette.background.base.text),
+            (_, false) => (
+                palette.background.weakest.color,
+                palette.background.base.text,
+            ),
         };
 
         button::Style {

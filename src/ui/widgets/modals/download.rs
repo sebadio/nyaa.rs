@@ -1,9 +1,9 @@
 use iced::{
     Element,
     Length::Fill,
-    widget::{button, column, row, text, toggler},
+    widget::{button, column, row, space, text, toggler},
 };
-use iced_fonts::devicon::space;
+
 use nyaa::NyaaItem;
 
 #[derive(Default, Debug, Clone)]

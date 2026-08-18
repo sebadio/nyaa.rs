@@ -79,6 +79,7 @@ pub(crate) enum NyaaMessage {
     Modal(modals::Message),
 }
 
+#[derive(Debug, Clone)]
 pub(crate) struct ActiveDownload {
     pub name: String,
     pub progress: f32,
@@ -123,15 +124,11 @@ impl NyaaAppState {
     pub(crate) fn view(&self) -> Element<'_, NyaaMessage> {
         let content = column![
             self.config.uses_custom_titlebar.then(titlebar),
-            column![
-                row![
-                    sidebar(&self.sidebar_animation, self.current_view.kind()),
-                    column![main_view(self)].width(Fill).padding(12)
-                ]
-                .spacing(12),
-            ]
+            column![row![
+                sidebar(&self.sidebar_animation, self.current_view.kind()),
+                column![main_view(self), status_bar(self.active_download.clone())].width(Fill)
+            ],]
             .height(Fill),
-            self.active_download.as_ref().map(status_bar)
         ];
 
         let mut layers = vec![content.into()];

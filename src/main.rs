@@ -5,7 +5,7 @@ pub mod util;
 
 use crate::config::Config;
 use iced::window::Settings;
-use iced::{Font, Size};
+use iced::{Font, Pixels, Size};
 use iced_fonts::LUCIDE_FONT_BYTES;
 use nyaa_app::NyaaAppState;
 
@@ -24,14 +24,18 @@ fn main() -> iced::Result {
         NyaaAppState::update,
         NyaaAppState::view,
     )
-    .default_font(Font::new("Monocraft")) // FIX <- This is slowing down the startup
     .decorations(decorations)
-    .font(LUCIDE_FONT_BYTES)
     .theme(NyaaAppState::theme)
     .window(Settings {
         min_size: Some(window_size),
         size: window_size,
         ..Settings::default()
+    })
+    .settings(iced::Settings {
+        default_text_size: Pixels(14.0),
+        default_font: Font::new("Monocraft"), // FIX <- This is slowing down the startup
+        fonts: vec![LUCIDE_FONT_BYTES.into()],
+        ..Default::default()
     })
     .title("Nyaa.rs")
     .subscription(NyaaAppState::subscription)

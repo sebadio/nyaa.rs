@@ -1,3 +1,4 @@
+pub mod appearance;
 pub mod config;
 pub mod nyaa_app;
 pub mod ui;

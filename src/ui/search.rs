@@ -13,6 +13,8 @@ use nyaa::request::NyaaRequest;
 use nyaa::{NyaaAdapter, NyaaAdapterError, NyaaCategory, NyaaItem};
 use thiserror::Error;
 
+use crate::appearance;
+
 pub(crate) enum Action {
     None,
     Task(Task<NyaaSearchMessage>),
@@ -207,14 +209,7 @@ fn search_row(state: &Search) -> Element<'_, NyaaSearchMessage> {
         .width(40)
         .height(40)
         .padding(10)
-        .style(|theme: &Theme, status| button::Style {
-            border: Border {
-                radius: Radius::from(10),
-                ..Default::default()
-            },
-            background: Some(theme.palette().background.stronger.color.into()),
-            ..Default::default()
-        });
+        .style(appearance::button::secondary);
 
     if !state.is_loading {
         txt_inp = txt_inp
@@ -269,7 +264,9 @@ fn item_size_info(item: &NyaaItem) -> Element<'static, NyaaSearchMessage> {
 
 fn item_download_button(item: &NyaaItem) -> Element<'static, NyaaSearchMessage> {
     container(
-        button(download().size(14)).on_press(NyaaSearchMessage::DownloadTorrent(item.clone())),
+        button(download().size(14))
+            .on_press(NyaaSearchMessage::DownloadTorrent(item.clone()))
+            .style(appearance::button::download),
     )
     .align_y(alignment::Vertical::Center)
     .align_x(alignment::Horizontal::Center)
@@ -287,15 +284,7 @@ fn item_title(item: &NyaaItem) -> Element<'static, NyaaSearchMessage> {
                 .ellipsis(text::Ellipsis::End)
         )
         .padding(0)
-        .style(|theme: &Theme, status| button::Style {
-            text_color: if status == button::Status::Hovered {
-                theme.palette().secondary.weak.color
-            } else {
-                theme.palette().background.base.text
-            },
-            background: None,
-            ..Default::default()
-        })
+        .style(appearance::button::title_hover)
         .on_press(NyaaSearchMessage::DownloadTorrent(item.clone()))
         .width(Fill),
         row![trusted, text(format!("{}", item.category))]

@@ -10,6 +10,8 @@ use qbittorrent::{self, Client, Torrent};
 use std::format;
 use std::path::Path;
 
+use crate::appearance;
+
 pub(crate) struct Library {
     pub(crate) query: String,
     pub(crate) torrents: Vec<Torrent>,
@@ -120,6 +122,7 @@ impl Library {
                     .align_x(iced::Alignment::Center)
                     .align_y(iced::Alignment::Center)
             )
+            .style(appearance::button::secondary)
             .height(TOOLBAR_HEIGHT)
             .width(TOOLBAR_HEIGHT)
             .on_press(LibraryMessage::Load)
@@ -146,20 +149,7 @@ impl Library {
 fn library_table_button(torrent: Torrent) -> Element<'static, LibraryMessage> {
     let hash = torrent.hash.clone();
     button(text(torrent.name).wrapping(Wrapping::WordOrGlyph))
-        .style(|theme: &Theme, status| {
-            let palette = theme.palette();
-            button::Style {
-                background: match status {
-                    button::Status::Hovered => Some(palette.background.weak.color.into()),
-                    _ => None,
-                },
-                text_color: match status {
-                    button::Status::Hovered => palette.danger.strong.color,
-                    _ => palette.background.base.text,
-                },
-                ..button::text(theme, status)
-            }
-        })
+        .style(appearance::button::title_hover)
         .width(Fill)
         .on_press(LibraryMessage::TorrentPressed(hash))
         .into()

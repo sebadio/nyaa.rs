@@ -13,7 +13,7 @@ use nyaa::request::NyaaRequest;
 use nyaa::{NyaaAdapter, NyaaAdapterError, NyaaCategory, NyaaItem};
 use thiserror::Error;
 
-use crate::appearance;
+use crate::appearance::{self, tokens};
 
 pub(crate) enum Action {
     None,
@@ -159,7 +159,7 @@ fn search_content(results: &[NyaaItem]) -> Element<'_, NyaaSearchMessage> {
 
     container(
         scrollable(table(columns, results))
-            .spacing(8)
+            .spacing(tokens::SPACING_SMALL)
             .width(Fill)
             .height(Fill),
     )
@@ -167,8 +167,8 @@ fn search_content(results: &[NyaaItem]) -> Element<'_, NyaaSearchMessage> {
     .style(|theme: &Theme| container::Style {
         border: Border {
             color: theme.palette().background.weak.color,
-            width: 2.0,
-            radius: Radius::from(10.0),
+            width: tokens::BORDER_THICK,
+            radius: Radius::from(tokens::RADIUS_LARGE),
         },
         ..Default::default()
     })
@@ -191,24 +191,17 @@ fn empty_search_content(has_searched: bool) -> Element<'static, NyaaSearchMessag
 
 fn search_row(state: &Search) -> Element<'_, NyaaSearchMessage> {
     let mut txt_inp = text_input("Let's search nyaa!", &state.query)
-        .padding([10, 12])
-        .line_height(text::LineHeight::Absolute(Pixels(20.0)))
-        .size(16)
+        .padding(tokens::INPUT_PADDING)
+        .line_height(tokens::INPUT_LINE_HEIGHT)
+        .size(tokens::INPUT_SIZE)
         .align_x(alignment::Horizontal::Center)
         .width(Fill)
-        .style(|theme: &Theme, status| text_input::Style {
-            border: Border {
-                color: theme.palette().background.weak.color,
-                width: 2.0,
-                radius: Radius::from(10.0),
-            },
-            ..text_input::default(theme, status)
-        });
+        .style(appearance::text_input::primary);
 
     let mut btn = button(center(search()))
-        .width(40)
-        .height(40)
-        .padding(10)
+        .width(tokens::BNT_BASE_SIZE)
+        .height(tokens::BNT_BASE_SIZE)
+        .padding(tokens::BTN_PADDING)
         .style(appearance::button::secondary);
 
     if !state.is_loading {
@@ -220,20 +213,20 @@ fn search_row(state: &Search) -> Element<'_, NyaaSearchMessage> {
     }
 
     let input_and_button = row![txt_inp, btn]
-        .height(40)
+        .height(tokens::BNT_BASE_SIZE)
         .align_y(Center)
-        .spacing(12)
+        .spacing(tokens::SPACING_BASE)
         .width(Fill);
 
     let filter_and_category = row![
         column![
             text("Filter"),
             pick_list(Some(state.filter), NyaaFilter::ALL, NyaaFilter::to_string)
-                .padding([6.0, 10.0])
+                .padding(tokens::PICK_LIST_PADDING)
                 .width(Fill)
                 .on_select(NyaaSearchMessage::FilterUpdated),
         ]
-        .spacing(2)
+        .spacing(tokens::SPACING_TINY)
         .width(Fill),
         column![
             text("Category"),
@@ -242,19 +235,19 @@ fn search_row(state: &Search) -> Element<'_, NyaaSearchMessage> {
                 NyaaCategory::ALL,
                 NyaaCategory::to_string
             )
-            .padding([6.0, 10.0])
+            .padding(tokens::PICK_LIST_PADDING)
             .width(Fill)
             .on_select(NyaaSearchMessage::CategoryUpdated)
         ]
-        .spacing(2)
+        .spacing(tokens::SPACING_TINY)
         .width(Fill)
     ]
     .align_y(alignment::Vertical::Center)
-    .spacing(12)
+    .spacing(tokens::SPACING_BASE)
     .width(Fill);
 
     column![input_and_button, filter_and_category]
-        .spacing(8)
+        .spacing(tokens::SPACING_SMALL)
         .into()
 }
 
@@ -284,25 +277,25 @@ fn item_title(item: &NyaaItem) -> Element<'static, NyaaSearchMessage> {
                 .ellipsis(text::Ellipsis::End)
         )
         .padding(0)
-        .style(appearance::button::title_hover)
+        .style(appearance::button::title_link)
         .on_press(NyaaSearchMessage::DownloadTorrent(item.clone()))
         .width(Fill),
         row![trusted, text(format!("{}", item.category))]
             .align_y(Center)
-            .spacing(8)
+            .spacing(tokens::SPACING_SMALL)
     ]
     .width(Fill);
 
     tooltip(
         title,
         container(text(item.title.clone()).size(14))
-            .width(400)
-            .padding([4.0, 6.0])
+            .width(tokens::TOOLTIP_WIDTH)
+            .padding(tokens::TOOLTIP_PADDING)
             .style(|theme: &Theme| container::Style {
                 background: Some(theme.palette().background.weak.color.into()),
                 border: Border {
                     color: theme.palette().primary.strong.color,
-                    width: 2.0,
+                    width: tokens::BORDER_THICK,
                     radius: Radius::from(4),
                 },
                 ..Default::default()
@@ -342,13 +335,13 @@ fn leechers(item: &NyaaItem) -> Element<'static, NyaaSearchMessage> {
 
 fn trusted_badge() -> Element<'static, NyaaSearchMessage> {
     container(text("Trusted").size(11))
-        .padding([1.0, 6.0])
+        .padding(tokens::BADGE_PADDING)
         .style(|theme: &Theme| container::Style {
             background: Some(theme.palette().background.weak.color.into()),
             border: Border {
-                radius: Radius::from(10),
+                radius: Radius::from(tokens::RADIUS_LARGE),
                 color: theme.palette().success.weak.color,
-                width: 1.0,
+                width: tokens::BORDER_THIN,
                 ..Default::default()
             },
             ..Default::default()

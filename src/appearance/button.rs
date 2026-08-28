@@ -1,6 +1,6 @@
-use iced::Theme;
 use iced::border::Radius;
 use iced::widget::button::{self, Status};
+use iced::{Border, Theme};
 
 use crate::appearance::tokens;
 
@@ -36,7 +36,7 @@ pub fn download(theme: &Theme, status: Status) -> button::Style {
     style
 }
 
-pub fn title_hover(theme: &Theme, status: Status) -> button::Style {
+pub fn title_link(theme: &Theme, status: Status) -> button::Style {
     let palette = theme.palette();
     let txt_col = match status {
         Status::Hovered => palette.primary.strong.color,
@@ -47,5 +47,37 @@ pub fn title_hover(theme: &Theme, status: Status) -> button::Style {
         text_color: txt_col,
         background: None,
         ..Default::default()
+    }
+}
+
+pub fn nav_button_style(is_selected: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
+    move |theme, status| {
+        let palette = theme.palette();
+
+        let (bg_color, text_color) = match (status, is_selected) {
+            (button::Status::Hovered | button::Status::Pressed, true) => (
+                palette.background.strong.color,
+                palette.background.base.text,
+            ),
+            (button::Status::Hovered, false) => (
+                palette.background.neutral.color,
+                palette.background.base.text,
+            ),
+            (_, true) => (palette.background.base.color, palette.background.base.text),
+            (_, false) => (
+                palette.background.weakest.color,
+                palette.background.base.text,
+            ),
+        };
+
+        button::Style {
+            background: Some(iced::Background::Color(bg_color)),
+            border: Border {
+                radius: Radius::from(tokens::RADIUS_LARGE),
+                ..Default::default()
+            },
+            text_color,
+            ..Default::default()
+        }
     }
 }

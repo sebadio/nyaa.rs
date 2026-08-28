@@ -1,3 +1,4 @@
+use crate::appearance::tokens;
 use crate::config::Config;
 use iced::Length::{Fill, FillPortion};
 use iced::border::Radius;
@@ -47,8 +48,8 @@ impl Settings {
         };
 
         column![
-            text("Config").size(48),
-            rule::horizontal(2).style(|theme: &Theme| rule::Style {
+            text("Config").size(tokens::TEXT_HEADER_SIZE),
+            rule::horizontal(tokens::BORDER_THICK).style(|theme: &Theme| rule::Style {
                 fill_mode: rule::FillMode::Full,
                 radius: Radius::default(),
                 snap: true,
@@ -94,9 +95,9 @@ impl Settings {
                         text_input("~/Downloads", &self.config.qtor_save_path)
                             .width(FillPortion(1))
                             .on_input(SettingsMessage::SavePathChanged),
-                        space().width(2),
                         button(folder()).on_press(SettingsMessage::PickSavePath)
-                    ],
+                    ]
+                    .spacing(tokens::SPACING_TINY),
                     validty_message.size(10)
                 ]
             ],
@@ -106,7 +107,7 @@ impl Settings {
                 button(text("Apply changes")).on_press(SettingsMessage::UpdatedConfig)
             ]
         ]
-        .spacing(10)
+        .spacing(tokens::SPACING_BASE)
         .into()
     }
 

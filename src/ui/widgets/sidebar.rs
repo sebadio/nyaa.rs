@@ -1,3 +1,4 @@
+use crate::appearance::{self, tokens};
 use crate::nyaa_app::{NyaaMessage, ScreenKind};
 use iced::Length::Fill;
 use iced::border::Radius;
@@ -45,17 +46,14 @@ pub(crate) fn sidebar<'a>(
                 current_screen == ScreenKind::Library
             ),
             space().height(Fill),
-            rule::horizontal(1),
+            rule::horizontal(tokens::BORDER_THIN),
             sidebar_footer(show_labels, current_screen),
         ]
-        .spacing(8)
+        .spacing(tokens::SPACING_SMALL)
         .width(width),
     )
-    .padding(12)
-    .style(|theme: &Theme| container::Style {
-        background: Some(theme.palette().background.weakest.color.into()),
-        ..Default::default()
-    })
+    .padding(tokens::SIDEBAR_PADDING)
+    .style(appearance::container::sidebar)
     .into()
 }
 
@@ -112,10 +110,10 @@ fn nav_button<'a>(
         button(
             row![icon_box, text(label)]
                 .align_y(Alignment::Center)
-                .spacing(8),
+                .spacing(tokens::SPACING_SMALL),
         )
         .width(Fill)
-        .padding(8)
+        .padding(tokens::BTN_PADDING)
     } else {
         button(icon_box).width(ICON_BUTTON_SIZE).padding(0)
     };
@@ -123,38 +121,6 @@ fn nav_button<'a>(
     button
         .on_press(msg)
         .height(ICON_BUTTON_SIZE)
-        .style(nav_button_style(is_selected))
+        .style(appearance::button::nav_button_style(is_selected))
         .into()
-}
-
-fn nav_button_style(is_selected: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
-    move |theme, status| {
-        let palette = theme.palette();
-
-        let (bg_color, text_color) = match (status, is_selected) {
-            (button::Status::Hovered | button::Status::Pressed, true) => (
-                palette.background.strong.color,
-                palette.background.base.text,
-            ),
-            (button::Status::Hovered, false) => (
-                palette.background.neutral.color,
-                palette.background.base.text,
-            ),
-            (_, true) => (palette.background.base.color, palette.background.base.text),
-            (_, false) => (
-                palette.background.weakest.color,
-                palette.background.base.text,
-            ),
-        };
-
-        button::Style {
-            background: Some(iced::Background::Color(bg_color)),
-            border: Border {
-                radius: Radius::from(10),
-                ..Default::default()
-            },
-            text_color,
-            ..Default::default()
-        }
-    }
 }

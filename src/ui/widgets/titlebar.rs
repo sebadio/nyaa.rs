@@ -1,3 +1,4 @@
+use crate::appearance::tokens;
 use crate::nyaa_app::NyaaMessage;
 use iced::Element;
 use iced::Length::Fill;
@@ -15,7 +16,7 @@ pub(crate) fn titlebar() -> Element<'static, NyaaMessage> {
             ]
             .width(Fill),
         )
-        .height(32),
+        .height(tokens::TITLEBAR_HEIGT),
     )
     .on_press(NyaaMessage::Drag)
     .on_double_click(NyaaMessage::ToggleWindowMode)

@@ -1,10 +1,10 @@
-use iced::{
-    Color, Element, Task, Theme,
-    widget::{center, container, mouse_area, opaque, text},
-};
+use iced::widget::{center, container, mouse_area, opaque, text};
+use iced::{Element, Task};
 pub(crate) mod download;
 pub(crate) mod save_settings;
 use log::info;
+
+use crate::appearance::{self, tokens};
 
 pub(crate) enum Modal {
     Download(download::Modal),
@@ -75,35 +75,12 @@ where
                 container(content)
                     .height(500)
                     .width(500)
-                    .padding(24)
-                    .style(modal_container_style),
+                    .padding(tokens::MODAL_PADDING)
+                    .style(appearance::container::modal),
             ))
-            .style(modal_container_backdrop_style),
+            .style(appearance::container::modal_backdrop),
         )
         .on_press(on_blur),
     )
     .into()
-}
-
-fn modal_container_style(theme: &Theme) -> container::Style {
-    let palette = theme.palette();
-
-    container::Style {
-        border: iced::Border {
-            color: palette.background.strong.color,
-            width: 2.0,
-            radius: iced::border::radius(8),
-        },
-        background: Some(palette.background.base.color.into()),
-        ..Default::default()
-    }
-}
-
-fn modal_container_backdrop_style(theme: &Theme) -> container::Style {
-    let black = theme.palette().background.weakest.color;
-
-    container::Style {
-        background: Some(Color { a: 0.8, ..black }.into()),
-        ..container::Style::default()
-    }
 }

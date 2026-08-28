@@ -3,14 +3,14 @@ use humansize::{DECIMAL, format_size};
 use iced::Length::{Fill, FillPortion};
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::text::Wrapping;
-use iced::widget::{button, column, progress_bar, row, scrollable, space, table, text, text_input};
-use iced::{Element, Font, Task, Theme, font};
+use iced::widget::{button, column, progress_bar, row, scrollable, table, text, text_input};
+use iced::{Element, Font, Task, alignment, font};
 use iced_fonts::lucide::refresh_cw;
 use qbittorrent::{self, Client, Torrent};
 use std::format;
 use std::path::Path;
 
-use crate::appearance;
+use crate::appearance::{self, tokens};
 
 pub(crate) struct Library {
     pub(crate) query: String,
@@ -109,29 +109,31 @@ impl Library {
             .width(FillPortion(1)),
         ];
 
-        const TOOLBAR_HEIGHT: f32 = 40.0;
         let header_search = row![
             text_input("Search for downloaded torrents here", &self.query)
                 .on_input(LibraryMessage::QueryChanged)
-                .line_height(2.0)
-                .padding(8)
+                .size(tokens::INPUT_SIZE)
+                .line_height(tokens::INPUT_LINE_HEIGHT)
+                .padding(tokens::INPUT_PADDING)
+                .style(appearance::text_input::primary)
+                .align_x(alignment::Horizontal::Center)
                 .width(Fill),
-            space().width(12),
             button(
                 refresh_cw()
                     .align_x(iced::Alignment::Center)
                     .align_y(iced::Alignment::Center)
             )
             .style(appearance::button::secondary)
-            .height(TOOLBAR_HEIGHT)
-            .width(TOOLBAR_HEIGHT)
+            .height(tokens::BNT_BASE_SIZE)
+            .width(tokens::BNT_BASE_SIZE)
+            .padding(tokens::BTN_PADDING)
             .on_press(LibraryMessage::Load)
         ]
-        .height(TOOLBAR_HEIGHT);
+        .spacing(tokens::SPACING_BASE)
+        .height(tokens::BNT_BASE_SIZE);
 
         column![
             header_search,
-            space().height(20),
             row![
                 scrollable(table(columns, filtered_torrents.iter().cloned()))
                     .width(Fill)
@@ -142,6 +144,7 @@ impl Library {
             ]
             .height(Fill)
         ]
+        .spacing(tokens::SPACING_LARGE)
         .into()
     }
 }
@@ -149,7 +152,7 @@ impl Library {
 fn library_table_button(torrent: Torrent) -> Element<'static, LibraryMessage> {
     let hash = torrent.hash.clone();
     button(text(torrent.name).wrapping(Wrapping::WordOrGlyph))
-        .style(appearance::button::title_hover)
+        .style(appearance::button::title_link)
         .width(Fill)
         .on_press(LibraryMessage::TorrentPressed(hash))
         .into()

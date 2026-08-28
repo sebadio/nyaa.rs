@@ -1,3 +1,4 @@
+use crate::appearance::tokens;
 use crate::nyaa_app::NyaaMessage;
 use iced::Length::Fill;
 use iced::border::Radius;
@@ -105,7 +106,7 @@ impl Toast {
                 row![text(self.message.clone()).size(12)]
             ])
             .style(|theme: &Theme| container_style(theme, &self.kind))
-            .padding(8)
+            .padding(tokens::TOAST_PADDING)
             .height(120)
             .width(320),
         )

@@ -1,6 +1,7 @@
+use crate::appearance::{self, tokens};
 use crate::nyaa_app::{ActiveDownload, NyaaMessage};
 use iced::alignment;
-use iced::widget::{Theme, container, progress_bar, row, text};
+use iced::widget::{container, progress_bar, row, text};
 use iced::{
     Element,
     Length::{Fill, Fixed},
@@ -36,12 +37,9 @@ pub(crate) fn status_bar(active_download: Option<ActiveDownload>) -> Element<'st
             .align_y(alignment::Vertical::Center)
             .spacing(8)
             .width(Fill)
-            .padding([0.0, 8.0]),
+            .padding(tokens::STATUS_BAR_PADDING),
     )
-    .style(|theme: &Theme| container::Style {
-        background: Some(theme.palette().background.weakest.color.into()),
-        ..Default::default()
-    })
-    .height(20)
+    .style(appearance::container::status_bar)
+    .height(tokens::STATUS_BAR_HEIGHT)
     .into()
 }

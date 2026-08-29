@@ -7,7 +7,7 @@ use iced::widget::image::Handle;
 use iced::widget::text::Wrapping;
 use iced::widget::{button, center, column, container, image, row, rule, space, text};
 use iced::{Alignment, Animation, Border, Element, Theme};
-use iced_fonts::lucide::{library, menu, search, settings};
+use iced_fonts::lucide::{download, menu, search, settings};
 use std::sync::LazyLock;
 
 static NYAA_ICON: LazyLock<Handle> = LazyLock::new(|| {
@@ -38,11 +38,11 @@ pub(crate) fn sidebar<'a>(
                 current_screen == ScreenKind::Search
             ),
             nav_button(
-                library(),
-                "Library",
-                NyaaMessage::Navigate(ScreenKind::Library),
+                download(),
+                "Downloads",
+                NyaaMessage::Navigate(ScreenKind::Downloads),
                 show_labels,
-                current_screen == ScreenKind::Library
+                current_screen == ScreenKind::Downloads
             ),
             space().height(Fill),
             rule::horizontal(tokens::BORDER_THIN),

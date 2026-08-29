@@ -3,7 +3,7 @@ use crate::ui::main_view;
 use crate::ui::settings::{self, Settings};
 use crate::ui::widgets::modals::{self, download, modal};
 use crate::ui::widgets::{Toast, ToastId, ToastKind, sidebar, status_bar, titlebar};
-use crate::ui::{Library, library};
+use crate::ui::{Downloads, downloads};
 use crate::ui::{Search, search};
 use crate::util::track_torrent;
 use iced::Length::Fill;
@@ -20,7 +20,7 @@ use std::io::ErrorKind;
 
 pub(crate) enum NyaaView {
     NyaaSearch(Search),
-    QtorLibrary(Library),
+    Downloads(Downloads),
     Settings(Settings),
 }
 
@@ -33,7 +33,7 @@ impl Default for NyaaView {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ScreenKind {
     Search,
-    Library,
+    Downloads,
     Settings,
 }
 
@@ -41,7 +41,7 @@ impl NyaaView {
     fn kind(&self) -> ScreenKind {
         match self {
             NyaaView::NyaaSearch(_) => ScreenKind::Search,
-            NyaaView::QtorLibrary(_) => ScreenKind::Library,
+            NyaaView::Downloads(_) => ScreenKind::Downloads,
             NyaaView::Settings(_) => ScreenKind::Settings,
         }
     }
@@ -58,7 +58,7 @@ pub(crate) enum NyaaMessage {
     AnimationTick,
     Navigate(ScreenKind),
     Search(search::NyaaSearchMessage),
-    Library(library::LibraryMessage),
+    Downloads(downloads::DownloadsMessage),
     Settings(settings::SettingsMessage),
     TorrentQueued(TorrentPostResponse),
     DismissToast(ToastId),
@@ -224,12 +224,12 @@ impl NyaaAppState {
                 log::info!("Changed view to {target:?}");
                 self.current_view = match target {
                     ScreenKind::Search => NyaaView::NyaaSearch(Search::new()),
-                    ScreenKind::Library => NyaaView::QtorLibrary(Library::new()),
+                    ScreenKind::Downloads => NyaaView::Downloads(Downloads::new()),
                     ScreenKind::Settings => NyaaView::Settings(Settings::new(self.config.clone())),
                 };
                 match target {
-                    ScreenKind::Library => {
-                        Task::done(NyaaMessage::Library(library::LibraryMessage::Load))
+                    ScreenKind::Downloads => {
+                        Task::done(NyaaMessage::Downloads(downloads::DownloadsMessage::Load))
                     }
                     _ => Task::none(),
                 }
@@ -252,14 +252,14 @@ impl NyaaAppState {
             NyaaMessage::ToggleWindowMode => window::latest().and_then(window::toggle_maximize),
             NyaaMessage::Minimize => window::latest().and_then(|id| window::minimize(id, true)),
             NyaaMessage::Drag => window::latest().and_then(window::drag),
-            NyaaMessage::Library(library_message) => {
-                let NyaaView::QtorLibrary(library) = &mut self.current_view else {
+            NyaaMessage::Downloads(downloads_message) => {
+                let NyaaView::Downloads(downloads) = &mut self.current_view else {
                     return Task::none();
                 };
-                match library.update(library_message, &self.qbt_client) {
-                    library::Action::None => Task::none(),
-                    library::Action::Task(task) => task.map(NyaaMessage::Library),
-                    library::Action::OpenPath(path) => {
+                match downloads.update(downloads_message, &self.qbt_client) {
+                    downloads::Action::None => Task::none(),
+                    downloads::Action::Task(task) => task.map(NyaaMessage::Downloads),
+                    downloads::Action::OpenPath(path) => {
                         if let Err(e) = open::that_detached(path) {
                             let toast = Toast::new()
                                 .set_title("Failed to open")
@@ -464,10 +464,10 @@ impl NyaaAppState {
     pub(crate) fn subscription(&self) -> Subscription<NyaaMessage> {
         let mut suscriptions = vec![time::every(Duration::from_secs(1)).map(|_| NyaaMessage::Tick)];
 
-        if matches!(self.current_view, NyaaView::QtorLibrary(_)) && self.qbt_client.is_logged_in() {
+        if matches!(self.current_view, NyaaView::Downloads(_)) && self.qbt_client.is_logged_in() {
             suscriptions.push(
                 time::every(Duration::from_secs(2))
-                    .map(|_| NyaaMessage::Library(library::LibraryMessage::Load)),
+                    .map(|_| NyaaMessage::Downloads(downloads::DownloadsMessage::Load)),
             );
         }
 

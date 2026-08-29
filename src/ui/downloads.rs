@@ -12,13 +12,13 @@ use std::path::Path;
 
 use crate::appearance::{self, tokens};
 
-pub(crate) struct Library {
+pub(crate) struct Downloads {
     pub(crate) query: String,
     pub(crate) torrents: Vec<Torrent>,
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum LibraryMessage {
+pub(crate) enum DownloadsMessage {
     QueryChanged(String),
     Load,
     Loaded(Result<Vec<Torrent>, qbittorrent::Error>),
@@ -27,11 +27,11 @@ pub(crate) enum LibraryMessage {
 
 pub(crate) enum Action {
     None,
-    Task(Task<LibraryMessage>),
+    Task(Task<DownloadsMessage>),
     OpenPath(String),
 }
 
-impl Library {
+impl Downloads {
     pub(crate) fn new() -> Self {
         Self {
             query: String::new(),
@@ -39,28 +39,28 @@ impl Library {
         }
     }
 
-    pub fn update(&mut self, message: LibraryMessage, client: &Client) -> Action {
+    pub fn update(&mut self, message: DownloadsMessage, client: &Client) -> Action {
         match message {
-            LibraryMessage::QueryChanged(q) => {
+            DownloadsMessage::QueryChanged(q) => {
                 self.query = q;
                 Action::None
             }
-            LibraryMessage::Load => {
+            DownloadsMessage::Load => {
                 let qbt = client.clone();
                 Action::Task(Task::perform(
                     async move { qbt.get_torrents().await },
-                    LibraryMessage::Loaded,
+                    DownloadsMessage::Loaded,
                 ))
             }
-            LibraryMessage::Loaded(Ok(list)) => {
+            DownloadsMessage::Loaded(Ok(list)) => {
                 self.torrents = list;
                 Action::None
             }
-            LibraryMessage::Loaded(Err(e)) => {
+            DownloadsMessage::Loaded(Err(e)) => {
                 log::warn!("qbt: {e:?}");
                 Action::None
             }
-            LibraryMessage::TorrentPressed(hash) => {
+            DownloadsMessage::TorrentPressed(hash) => {
                 match self.torrents.iter().find(|t| t.hash == hash) {
                     Some(t) => Action::OpenPath(t.content_path.clone()),
                     None => Action::None,
@@ -69,8 +69,8 @@ impl Library {
         }
     }
 
-    pub(crate) fn view(&self) -> Element<'_, LibraryMessage> {
-        let filtered_torrents = filter_library_torrents(&self.query, &self.torrents);
+    pub(crate) fn view(&self) -> Element<'_, DownloadsMessage> {
+        let filtered_torrents = filter_torrents(&self.query, &self.torrents);
 
         let column_header_font = Font {
             weight: font::Weight::Bold,
@@ -79,7 +79,7 @@ impl Library {
 
         let columns = [
             table::column(text("Name").font(column_header_font), |t: Torrent| {
-                library_table_button(t)
+                table_button(t)
             })
             .width(FillPortion(6)),
             table::column(text("Size").font(column_header_font), |t: Torrent| {
@@ -111,7 +111,7 @@ impl Library {
 
         let header_search = row![
             text_input("Search for downloaded torrents here", &self.query)
-                .on_input(LibraryMessage::QueryChanged)
+                .on_input(DownloadsMessage::QueryChanged)
                 .size(tokens::INPUT_SIZE)
                 .line_height(tokens::INPUT_LINE_HEIGHT)
                 .padding(tokens::INPUT_PADDING)
@@ -127,7 +127,7 @@ impl Library {
             .height(tokens::BUTTON_SIZE)
             .width(tokens::BUTTON_SIZE)
             .padding(tokens::BTN_PADDING)
-            .on_press(LibraryMessage::Load)
+            .on_press(DownloadsMessage::Load)
         ]
         .spacing(tokens::SPACING_BASE)
         .height(tokens::BUTTON_SIZE);
@@ -149,12 +149,12 @@ impl Library {
     }
 }
 
-fn library_table_button(torrent: Torrent) -> Element<'static, LibraryMessage> {
+fn table_button(torrent: Torrent) -> Element<'static, DownloadsMessage> {
     let hash = torrent.hash.clone();
     button(text(torrent.name).wrapping(Wrapping::WordOrGlyph))
         .style(appearance::button::title_link)
         .width(Fill)
-        .on_press(LibraryMessage::TorrentPressed(hash))
+        .on_press(DownloadsMessage::TorrentPressed(hash))
         .into()
 }
 
@@ -171,7 +171,7 @@ fn is_video(name: &str) -> bool {
         .unwrap_or(false)
 }
 
-fn filter_library_torrents(query: &str, torrents: &[Torrent]) -> Vec<Torrent> {
+fn filter_torrents(query: &str, torrents: &[Torrent]) -> Vec<Torrent> {
     let normalized_query = normalize(query);
     let words: Vec<&str> = normalized_query.split_whitespace().collect();
 

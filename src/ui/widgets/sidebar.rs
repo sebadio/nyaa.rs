@@ -6,8 +6,7 @@ use iced::time::Instant;
 use iced::widget::image::Handle;
 use iced::widget::text::Wrapping;
 use iced::widget::{button, center, column, container, image, row, rule, space, text};
-use iced::{Alignment, Animation, Border};
-use iced::{Element, Theme};
+use iced::{Alignment, Animation, Border, Element, Theme};
 use iced_fonts::lucide::{library, menu, search, settings};
 use std::sync::LazyLock;
 
@@ -30,7 +29,7 @@ pub(crate) fn sidebar<'a>(
     container(
         column![
             sidebar_header(show_labels),
-            space().height(20),
+            space().height(tokens::SPACING_LARGE),
             nav_button(
                 search(),
                 "Nyaa Search",
@@ -53,7 +52,7 @@ pub(crate) fn sidebar<'a>(
         .width(width),
     )
     .padding(tokens::SIDEBAR_PADDING)
-    .style(appearance::container::sidebar)
+    .style(appearance::container::weakest)
     .into()
 }
 
@@ -62,7 +61,7 @@ fn sidebar_header<'a>(show_labels: bool) -> Element<'a, NyaaMessage> {
         image(NYAA_ICON.clone())
             .width(ICON_BUTTON_SIZE)
             .height(ICON_BUTTON_SIZE)
-            .border_radius(10),
+            .border_radius(tokens::RADIUS_LARGE),
         show_labels.then(|| text("Nyaa.rs")
             .size(20)
             .center()
@@ -70,7 +69,7 @@ fn sidebar_header<'a>(show_labels: bool) -> Element<'a, NyaaMessage> {
             .wrapping(Wrapping::None))
     ]
     .align_y(Alignment::Center)
-    .spacing(8)
+    .spacing(tokens::SPACING_SMALL)
     .into()
 }
 
@@ -91,7 +90,7 @@ fn sidebar_footer<'a>(show_labels: bool, current_screen: ScreenKind) -> Element<
             false
         ),
     ]
-    .spacing(8)
+    .spacing(tokens::SPACING_SMALL)
     .into()
 }
 
@@ -121,6 +120,38 @@ fn nav_button<'a>(
     button
         .on_press(msg)
         .height(ICON_BUTTON_SIZE)
-        .style(appearance::button::nav_button_style(is_selected))
+        .style(nav_button_style(is_selected))
         .into()
+}
+
+pub fn nav_button_style(is_selected: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
+    move |theme, status| {
+        let palette = theme.palette();
+
+        let (bg_color, text_color) = match (status, is_selected) {
+            (button::Status::Hovered | button::Status::Pressed, true) => (
+                palette.background.strong.color,
+                palette.background.base.text,
+            ),
+            (button::Status::Hovered, false) => (
+                palette.background.neutral.color,
+                palette.background.base.text,
+            ),
+            (_, true) => (palette.background.base.color, palette.background.base.text),
+            (_, false) => (
+                palette.background.weakest.color,
+                palette.background.base.text,
+            ),
+        };
+
+        button::Style {
+            background: Some(iced::Background::Color(bg_color)),
+            border: Border {
+                radius: Radius::from(tokens::RADIUS_LARGE),
+                ..Default::default()
+            },
+            text_color,
+            ..Default::default()
+        }
+    }
 }

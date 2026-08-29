@@ -6,6 +6,8 @@ use iced::{
 
 use nyaa::NyaaItem;
 
+use crate::appearance::tokens;
+
 #[derive(Default, Debug, Clone)]
 pub(crate) struct Options {
     pub(crate) open_on_finish: bool,
@@ -32,6 +34,8 @@ pub(crate) enum Action {
     Submit(Options),
 }
 
+const TOGGLER_SIZE: u32 = 32;
+
 impl Modal {
     pub(crate) fn new(item: NyaaItem) -> Self {
         Self {
@@ -42,20 +46,21 @@ impl Modal {
 
     pub(crate) fn view<'a>(&self) -> Element<'a, Message> {
         column![
-            row![text("What do we do after?").size(42)],
-            space().height(12),
+            row![text("What do we do after?").size(tokens::TEXT_HEADER_SIZE)],
             row![
                 text("Open on finish?").size(20).width(Fill),
                 toggler(self.options.open_on_finish)
                     .on_toggle(Message::ToggleOpenOnFinish)
-                    .size(32)
-            ],
+                    .size(TOGGLER_SIZE)
+            ]
+            .spacing(tokens::SPACING_BASE),
             row![
                 text("Add to library?").size(20).width(Fill),
                 toggler(self.options.add_to_library)
                     .on_toggle(Message::ToggleAddToLibrary)
-                    .size(32)
-            ],
+                    .size(TOGGLER_SIZE)
+            ]
+            .spacing(tokens::SPACING_BASE),
             space().height(Fill),
             row![
                 button(text("Cancel")).on_press(Message::Cancel),
@@ -63,7 +68,7 @@ impl Modal {
                 button("Submit").on_press(Message::Submit)
             ]
         ]
-        .spacing(12)
+        .spacing(tokens::SPACING_BASE)
         .into()
     }
 

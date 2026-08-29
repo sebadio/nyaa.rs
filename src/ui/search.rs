@@ -1,19 +1,17 @@
+use crate::appearance::{self, tokens};
 use iced::Length::Fill;
 use iced::alignment::Vertical::Center;
-use iced::border::Radius;
 use iced::widget::{
     button, center, column, container, pick_list, row, scrollable, space, table, text, text_input,
     tooltip,
 };
-use iced::{Border, Element, Pixels, Task, Theme, alignment};
+use iced::{Element, Task, alignment};
 use iced_fonts::lucide::{arrow_down, arrow_up, download, search};
 use log::{error, info};
 use nyaa::filter::NyaaFilter;
 use nyaa::request::NyaaRequest;
 use nyaa::{NyaaAdapter, NyaaAdapterError, NyaaCategory, NyaaItem};
 use thiserror::Error;
-
-use crate::appearance::{self, tokens};
 
 pub(crate) enum Action {
     None,
@@ -68,7 +66,9 @@ impl Search {
                 (false, true) => empty_search_content(self.has_searched),
             };
 
-        column![search_row(&self), content].spacing(12).into()
+        column![search_row(&self), content]
+            .spacing(tokens::SPACING_BASE)
+            .into()
     }
 
     pub(crate) fn update(
@@ -163,15 +163,8 @@ fn search_content(results: &[NyaaItem]) -> Element<'_, NyaaSearchMessage> {
             .width(Fill)
             .height(Fill),
     )
-    .padding(10)
-    .style(|theme: &Theme| container::Style {
-        border: Border {
-            color: theme.palette().background.weak.color,
-            width: tokens::BORDER_THICK,
-            radius: Radius::from(tokens::RADIUS_LARGE),
-        },
-        ..Default::default()
-    })
+    .padding(tokens::PANEL_PADDING)
+    .style(appearance::container::base)
     .into()
 }
 
@@ -182,7 +175,7 @@ fn empty_search_content(has_searched: bool) -> Element<'static, NyaaSearchMessag
         } else {
             "Let's search something up!"
         })
-        .size(24)
+        .size(tokens::TEXT_LARGE)
     )]
     .width(Fill)
     .height(Fill)
@@ -199,8 +192,8 @@ fn search_row(state: &Search) -> Element<'_, NyaaSearchMessage> {
         .style(appearance::text_input::primary);
 
     let mut btn = button(center(search()))
-        .width(tokens::BNT_BASE_SIZE)
-        .height(tokens::BNT_BASE_SIZE)
+        .width(tokens::BUTTON_SIZE)
+        .height(tokens::BUTTON_SIZE)
         .padding(tokens::BTN_PADDING)
         .style(appearance::button::secondary);
 
@@ -213,7 +206,7 @@ fn search_row(state: &Search) -> Element<'_, NyaaSearchMessage> {
     }
 
     let input_and_button = row![txt_inp, btn]
-        .height(tokens::BNT_BASE_SIZE)
+        .height(tokens::BUTTON_SIZE)
         .align_y(Center)
         .spacing(tokens::SPACING_BASE)
         .width(Fill);
@@ -259,7 +252,7 @@ fn item_download_button(item: &NyaaItem) -> Element<'static, NyaaSearchMessage> 
     container(
         button(download().size(14))
             .on_press(NyaaSearchMessage::DownloadTorrent(item.clone()))
-            .style(appearance::button::download),
+            .style(appearance::button::secondary_action),
     )
     .align_y(alignment::Vertical::Center)
     .align_x(alignment::Horizontal::Center)
@@ -270,81 +263,54 @@ fn item_title(item: &NyaaItem) -> Element<'static, NyaaSearchMessage> {
     let trusted: Option<Element<'static, NyaaSearchMessage>> =
         item.trusted.then_some(trusted_badge());
 
-    let title = column![
+    let btn_tooltip = tooltip(
         button(
             text(item.title.clone())
                 .wrapping(text::Wrapping::None)
-                .ellipsis(text::Ellipsis::End)
+                .ellipsis(text::Ellipsis::End),
         )
-        .padding(0)
+        .padding(tokens::PADDING_NONE)
         .style(appearance::button::title_link)
         .on_press(NyaaSearchMessage::DownloadTorrent(item.clone()))
         .width(Fill),
+        container(text(item.title.clone()).size(14))
+            .width(tokens::TOOLTIP_WIDTH)
+            .padding(tokens::TOOLTIP_PADDING)
+            .style(appearance::container::tooltip),
+        tooltip::Position::FollowCursor,
+    );
+
+    column![
+        btn_tooltip,
         row![trusted, text(format!("{}", item.category))]
             .align_y(Center)
             .spacing(tokens::SPACING_SMALL)
     ]
-    .width(Fill);
-
-    tooltip(
-        title,
-        container(text(item.title.clone()).size(14))
-            .width(tokens::TOOLTIP_WIDTH)
-            .padding(tokens::TOOLTIP_PADDING)
-            .style(|theme: &Theme| container::Style {
-                background: Some(theme.palette().background.weak.color.into()),
-                border: Border {
-                    color: theme.palette().primary.strong.color,
-                    width: tokens::BORDER_THICK,
-                    radius: Radius::from(4),
-                },
-                ..Default::default()
-            }),
-        tooltip::Position::FollowCursor,
-    )
+    .width(Fill)
     .into()
 }
 
 fn seeders(item: &NyaaItem) -> Element<'static, NyaaSearchMessage> {
-    let cant = item.seeders;
-    let seeder_style = |theme: &Theme| text::Style {
-        color: Some(theme.palette().success.base.color),
-    };
-
     row![
-        arrow_up().style(seeder_style),
-        text(format!("{}", cant)).style(seeder_style)
+        arrow_up().style(appearance::text::seeder),
+        text(format!("{}", item.seeders)).style(appearance::text::seeder)
     ]
-    .spacing(4)
+    .spacing(tokens::SPACING_SMALL)
     .into()
 }
 
 fn leechers(item: &NyaaItem) -> Element<'static, NyaaSearchMessage> {
-    let cant = item.leechers;
-    let leecher_style = |theme: &Theme| text::Style {
-        color: Some(theme.palette().danger.base.color),
-    };
-
     row![
-        arrow_down().style(leecher_style),
-        text(format!("{}", cant)).style(leecher_style)
+        arrow_down().style(appearance::text::leecher),
+        text(format!("{}", item.leechers)).style(appearance::text::leecher)
     ]
-    .spacing(4)
+    .spacing(tokens::SPACING_SMALL)
     .into()
 }
 
 fn trusted_badge() -> Element<'static, NyaaSearchMessage> {
     container(text("Trusted").size(11))
         .padding(tokens::BADGE_PADDING)
-        .style(|theme: &Theme| container::Style {
-            background: Some(theme.palette().background.weak.color.into()),
-            border: Border {
-                radius: Radius::from(tokens::RADIUS_LARGE),
-                color: theme.palette().success.weak.color,
-                width: tokens::BORDER_THIN,
-                ..Default::default()
-            },
-            ..Default::default()
-        })
+        .style(appearance::container::badge_success)
         .into()
 }

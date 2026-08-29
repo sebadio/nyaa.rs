@@ -35,11 +35,11 @@ pub(crate) fn status_bar(active_download: Option<ActiveDownload>) -> Element<'st
     container(
         content
             .align_y(alignment::Vertical::Center)
-            .spacing(8)
+            .spacing(tokens::SPACING_SMALL)
             .width(Fill)
             .padding(tokens::STATUS_BAR_PADDING),
     )
-    .style(appearance::container::status_bar)
+    .style(appearance::container::weakest)
     .height(tokens::STATUS_BAR_HEIGHT)
     .into()
 }

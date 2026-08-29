@@ -78,7 +78,7 @@ where
                     .padding(tokens::MODAL_PADDING)
                     .style(appearance::container::modal),
             ))
-            .style(appearance::container::modal_backdrop),
+            .style(appearance::container::backdrop),
         )
         .on_press(on_blur),
     )

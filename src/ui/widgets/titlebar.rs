@@ -16,7 +16,7 @@ pub(crate) fn titlebar() -> Element<'static, NyaaMessage> {
             ]
             .width(Fill),
         )
-        .height(tokens::TITLEBAR_HEIGT),
+        .height(tokens::TITLEBAR_HEIGHT),
     )
     .on_press(NyaaMessage::Drag)
     .on_double_click(NyaaMessage::ToggleWindowMode)

@@ -124,13 +124,13 @@ impl Library {
                     .align_y(iced::Alignment::Center)
             )
             .style(appearance::button::secondary)
-            .height(tokens::BNT_BASE_SIZE)
-            .width(tokens::BNT_BASE_SIZE)
+            .height(tokens::BUTTON_SIZE)
+            .width(tokens::BUTTON_SIZE)
             .padding(tokens::BTN_PADDING)
             .on_press(LibraryMessage::Load)
         ]
         .spacing(tokens::SPACING_BASE)
-        .height(tokens::BNT_BASE_SIZE);
+        .height(tokens::BUTTON_SIZE);
 
         column![
             header_search,

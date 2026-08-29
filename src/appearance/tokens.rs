@@ -30,12 +30,15 @@ pub(crate) const SPACING_SMALL: u32 = 8;
 pub(crate) const SPACING_BASE: u32 = 12;
 pub(crate) const SPACING_LARGE: u32 = 20;
 
-pub(crate) const BNT_BASE_SIZE: u32 = 40;
+pub(crate) const PADDING_NONE: f32 = 0.0;
+
+pub(crate) const BUTTON_SIZE: u32 = 40;
 pub(crate) const BTN_PADDING: f32 = 10.0;
 
 pub(crate) const TOOLTIP_WIDTH: f32 = 400.0;
 
 pub(crate) const TEXT_HEADER_SIZE: u32 = 48;
+pub(crate) const TEXT_LARGE: u32 = 24;
 
-pub(crate) const TITLEBAR_HEIGT: u32 = 32;
+pub(crate) const TITLEBAR_HEIGHT: u32 = 32;
 pub(crate) const STATUS_BAR_HEIGHT: u32 = 20;

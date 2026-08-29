@@ -3,6 +3,7 @@ pub(crate) mod search;
 pub(crate) mod settings;
 pub(crate) mod widgets;
 
+use crate::appearance::tokens;
 use crate::nyaa_app::{NyaaAppState, NyaaMessage, NyaaView};
 use iced::Element;
 use iced::Length::Fill;
@@ -20,7 +21,7 @@ pub(crate) fn main_view(app_state: &NyaaAppState) -> Element<'_, NyaaMessage> {
     };
 
     container(content)
-        .padding(12)
+        .padding(tokens::ROOT_PADDING)
         .width(Fill)
         .height(Fill)
         .into()

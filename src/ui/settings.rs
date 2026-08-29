@@ -1,10 +1,10 @@
-use crate::appearance::tokens;
+use crate::appearance::{self, tokens};
 use crate::config::Config;
 use iced::Length::{Fill, FillPortion};
+use iced::Theme;
 use iced::border::Radius;
-use iced::widget::{Text, button, column, pick_list, row, rule, space, text, text_input};
+use iced::widget::{button, column, pick_list, row, rule, space, text, text_input};
 use iced::{Alignment, Element, Task};
-use iced::{Color, Theme};
 use iced_fonts::lucide::folder;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -41,10 +41,12 @@ impl Settings {
     }
 
     pub(crate) fn view(&self) -> Element<'_, SettingsMessage> {
-        let validty_message: Text<'_, iced::Theme> = if self.is_path_valid {
-            text("Valid path").color(Color::from_rgba(0.0, 1.0, 0.0, 1.0))
+        let path_validity_text = if self.is_path_valid {
+            text("Valid path").style(appearance::text::valid).size(10)
         } else {
-            text("Invalid Path").color(Color::from_rgba(1.0, 0.0, 0.0, 1.0))
+            text("Invalid path")
+                .style(appearance::text::invalid)
+                .size(10)
         };
 
         column![
@@ -98,7 +100,7 @@ impl Settings {
                         button(folder()).on_press(SettingsMessage::PickSavePath)
                     ]
                     .spacing(tokens::SPACING_TINY),
-                    validty_message.size(10)
+                    path_validity_text
                 ]
             ],
             space().height(Fill),

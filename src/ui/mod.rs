@@ -1,8 +1,6 @@
-pub(crate) mod downloads;
-pub(crate) mod search;
-pub(crate) mod settings;
+pub(crate) mod views;
+pub(crate) use views::{downloads, search, settings};
 pub(crate) mod widgets;
-
 use crate::appearance::tokens;
 use crate::nyaa_app::{NyaaAppState, NyaaMessage, NyaaView};
 pub(crate) use downloads::Downloads;

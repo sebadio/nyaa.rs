@@ -10,6 +10,8 @@ use iced::{Font, Pixels, Size};
 use iced_fonts::LUCIDE_FONT_BYTES;
 use nyaa_app::NyaaAppState;
 
+const APP_ID: &str = "com.nyaars.Nyaars";
+
 fn main() -> iced::Result {
     env_logger::init();
 
@@ -30,9 +32,14 @@ fn main() -> iced::Result {
     .window(Settings {
         min_size: Some(window_size),
         size: window_size,
+        platform_specific: iced::window::settings::PlatformSpecific {
+            application_id: APP_ID.to_string(),
+            ..Default::default()
+        },
         ..Settings::default()
     })
     .settings(iced::Settings {
+        id: Some(APP_ID.to_string()),
         default_text_size: Pixels(14.0),
         default_font: Font::new("Monocraft"), // FIX <- This is slowing down the startup
         fonts: vec![LUCIDE_FONT_BYTES.into()],

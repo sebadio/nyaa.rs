@@ -31,6 +31,19 @@ impl From<reqwest::Error> for Error {
     }
 }
 
+#[derive(Serialize)]
+struct TorrentHashes<'a> {
+    hashes: &'a str,
+}
+
+#[derive(Serialize)]
+struct DeleteTorrent<'a> {
+    hashes: &'a str,
+
+    #[serde(rename = "deleteFiles")]
+    delete_files: bool,
+}
+
 #[derive(Debug, Clone)]
 pub struct Client {
     http: reqwest::Client,
@@ -164,6 +177,78 @@ impl Client {
                 Ok(resp)
             }
         }
+    }
+
+    async fn post<T: Serialize + ?Sized>(
+        &self,
+        path: &str,
+        form: &T,
+    ) -> Result<reqwest::Response, Error> {
+        self.ensure_logged_in().await?;
+
+        let url = format!("{}{}", self.base_url, path);
+
+        let resp = self
+            .http
+            .post(&url)
+            .header("Referer", &self.base_url)
+            .form(form)
+            .send()
+            .await?;
+
+        log::info!("Called POST with path: {path}");
+
+        match resp.status() {
+            StatusCode::FORBIDDEN | StatusCode::UNAUTHORIZED => {
+                self.invalidate_login();
+                self.ensure_logged_in().await?;
+
+                let resp = self
+                    .http
+                    .post(&url)
+                    .header("Referer", &self.base_url)
+                    .form(form)
+                    .send()
+                    .await?;
+
+                if resp.status() == StatusCode::FORBIDDEN
+                    || resp.status() == StatusCode::UNAUTHORIZED
+                {
+                    return Err(Error::Auth(format!("forbidden after re-auth: {url}")));
+                }
+
+                Ok(resp.error_for_status()?)
+            }
+
+            _ => Ok(resp.error_for_status()?),
+        }
+    }
+
+    pub async fn pause_torrent(&self, hash: &str) -> Result<(), Error> {
+        self.post("/api/v2/torrents/stop", &TorrentHashes { hashes: hash })
+            .await?;
+
+        Ok(())
+    }
+
+    pub async fn resume_torrent(&self, hash: &str) -> Result<(), Error> {
+        self.post("/api/v2/torrents/start", &TorrentHashes { hashes: hash })
+            .await?;
+
+        Ok(())
+    }
+
+    pub async fn remove_torrent(&self, hash: &str, delete_files: bool) -> Result<(), Error> {
+        self.post(
+            "/api/v2/torrents/delete",
+            &DeleteTorrent {
+                hashes: hash,
+                delete_files,
+            },
+        )
+        .await?;
+
+        Ok(())
     }
 
     pub fn is_logged_in(&self) -> bool {

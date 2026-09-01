@@ -18,10 +18,10 @@ const SIDEBAR_COLLAPSED: f32 = 40.0;
 const SIDEBAR_EXPANDED: f32 = 190.0;
 const ICON_BUTTON_SIZE: f32 = SIDEBAR_COLLAPSED;
 
-pub(crate) fn sidebar<'a>(
+pub(crate) fn sidebar(
     animation: &Animation<bool>,
     current_screen: ScreenKind,
-) -> Element<'a, NyaaMessage> {
+) -> Element<'_, NyaaMessage> {
     let now = Instant::now();
     let width = animation.interpolate(SIDEBAR_COLLAPSED, SIDEBAR_EXPANDED, now);
     let show_labels = !animation.is_animating(now) && animation.value();

@@ -39,6 +39,9 @@ pub(crate) const TOOLTIP_WIDTH: f32 = 400.0;
 
 pub(crate) const TEXT_HEADER_SIZE: u32 = 48;
 pub(crate) const TEXT_LARGE: u32 = 24;
+pub(crate) const TEXT_BASE: u32 = 14;
+pub(crate) const TEXT_SMALL: u32 = 12;
+pub(crate) const TEXT_TINY: u32 = 10;
 
 pub(crate) const TITLEBAR_HEIGHT: u32 = 32;
 pub(crate) const STATUS_BAR_HEIGHT: u32 = 20;

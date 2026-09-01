@@ -1,16 +1,13 @@
-use chrono::{DateTime, Local, Utc};
-use humansize::{DECIMAL, format_size};
-use iced::Length::{Fill, FillPortion};
+use crate::appearance::{self, tokens};
+use crate::ui::widgets::download_item::download_item;
+use iced::Length::Fill;
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::text::Wrapping;
-use iced::widget::{button, column, progress_bar, row, scrollable, table, text, text_input};
-use iced::{Element, Font, Task, alignment, font};
+use iced::widget::{button, column, row, scrollable, text, text_input};
+use iced::{Element, Task, alignment};
 use iced_fonts::lucide::refresh_cw;
 use qbittorrent::{self, Client, Torrent};
-use std::format;
 use std::path::Path;
-
-use crate::appearance::{self, tokens};
 
 pub(crate) struct Downloads {
     pub(crate) query: String,
@@ -23,11 +20,19 @@ pub(crate) enum DownloadsMessage {
     Load,
     Loaded(Result<Vec<Torrent>, qbittorrent::Error>),
     TorrentPressed(String),
+    PauseTorrent(String),
+    ResumeTorrent(String),
+    RemoveTorrent(String),
+
+    PauseResult(Result<(), qbittorrent::Error>),
+    ResumeResult(Result<(), qbittorrent::Error>),
+    RemoveResult(Result<(), qbittorrent::Error>),
 }
 
 pub(crate) enum Action {
     None,
     Task(Task<DownloadsMessage>),
+    ShowError(String),
     OpenPath(String),
 }
 
@@ -41,6 +46,40 @@ impl Downloads {
 
     pub fn update(&mut self, message: DownloadsMessage, client: &Client) -> Action {
         match message {
+            DownloadsMessage::PauseResult(Ok(_))
+            | DownloadsMessage::RemoveResult(Ok(_))
+            | DownloadsMessage::ResumeResult(Ok(_)) => Action::None,
+
+            DownloadsMessage::PauseResult(Err(e))
+            | DownloadsMessage::RemoveResult(Err(e))
+            | DownloadsMessage::ResumeResult(Err(e)) => Action::ShowError(e.to_string()),
+
+            DownloadsMessage::PauseTorrent(hash) => {
+                log::info!("Paused {}", hash);
+                let qbt = client.clone();
+                Action::Task(Task::perform(
+                    async move { qbt.pause_torrent(&hash).await },
+                    DownloadsMessage::PauseResult,
+                ))
+            }
+            DownloadsMessage::ResumeTorrent(hash) => {
+                log::info!("Resumed {}", hash);
+                let qbt = client.clone();
+                Action::Task(Task::perform(
+                    async move { qbt.resume_torrent(&hash).await },
+                    DownloadsMessage::PauseResult,
+                ))
+            }
+            DownloadsMessage::RemoveTorrent(hash) => {
+                // FIX: Ask the user in a modal if they are sure
+                log::info!("Removed {}", hash);
+                let qbt = client.clone();
+                Action::Task(Task::perform(
+                    async move { qbt.remove_torrent(&hash, true).await }, // FIX : Maybe ask the user if they want to delete the files
+                    DownloadsMessage::PauseResult,
+                ))
+            }
+
             DownloadsMessage::QueryChanged(q) => {
                 self.query = q;
                 Action::None
@@ -57,8 +96,8 @@ impl Downloads {
                 Action::None
             }
             DownloadsMessage::Loaded(Err(e)) => {
-                log::warn!("qbt: {e:?}");
-                Action::None
+                log::error!("qbt: {e:?}");
+                Action::ShowError(e.to_string())
             }
             DownloadsMessage::TorrentPressed(hash) => {
                 match self.torrents.iter().find(|t| t.hash == hash) {
@@ -71,43 +110,6 @@ impl Downloads {
 
     pub(crate) fn view(&self) -> Element<'_, DownloadsMessage> {
         let filtered_torrents = filter_torrents(&self.query, &self.torrents);
-
-        let column_header_font = Font {
-            weight: font::Weight::Bold,
-            ..Font::default()
-        };
-
-        let columns = [
-            table::column(text("Name").font(column_header_font), |t: Torrent| {
-                table_button(t)
-            })
-            .width(FillPortion(6)),
-            table::column(text("Size").font(column_header_font), |t: Torrent| {
-                text(format_size(t.size, DECIMAL)).wrapping(Wrapping::None)
-            })
-            .width(FillPortion(1)),
-            table::column(text("Seeders").font(column_header_font), |t: Torrent| {
-                text(format!("{} ({})", t.num_seeds, t.num_complete)).wrapping(Wrapping::None)
-            })
-            .width(FillPortion(1)),
-            table::column(text("Leechs").font(column_header_font), |t: Torrent| {
-                text(format!("{} ({})", t.num_leechs, t.num_incomplete)).wrapping(Wrapping::None)
-            })
-            .width(FillPortion(1)),
-            table::column(text("Progress").font(column_header_font), |t: Torrent| {
-                column![
-                    progress_bar(0.0..=100.0, t.progress * 100.0),
-                    text(format!("{:.0}%", t.progress * 100.0))
-                ]
-            })
-            .width(FillPortion(1)),
-            table::column(text("Added On").font(column_header_font), |t: Torrent| {
-                let dt_utc = DateTime::<Utc>::from_timestamp(t.added_on, 0).unwrap();
-                let dt_local: DateTime<Local> = dt_utc.into();
-                text(format!("{}", dt_local.format("%y-%m-%d %H:%M:%S")))
-            })
-            .width(FillPortion(1)),
-        ];
 
         let header_search = row![
             text_input("Search for downloaded torrents here", &self.query)
@@ -135,12 +137,15 @@ impl Downloads {
         column![
             header_search,
             row![
-                scrollable(table(columns, filtered_torrents.iter().cloned()))
-                    .width(Fill)
-                    .height(Fill)
-                    .direction(scrollable::Direction::Vertical(
-                        Scrollbar::new().width(8).scroller_width(8).spacing(5) // ← embeds it: always shown, reserves space, doesn't float
-                    ))
+                scrollable(
+                    column(filtered_torrents.iter().map(download_item))
+                        .spacing(tokens::SPACING_BASE)
+                )
+                .width(Fill)
+                .height(Fill)
+                .direction(scrollable::Direction::Vertical(
+                    Scrollbar::new().width(8).scroller_width(8).spacing(5) // ← embeds it: always shown, reserves space, doesn't float
+                ))
             ]
             .height(Fill)
         ]
@@ -162,13 +167,17 @@ fn normalize(s: &str) -> String {
     s.to_lowercase().replace(['.', '_', '-'], " ")
 }
 
-fn is_video(name: &str) -> bool {
-    const VIDEO_EXTS: [&str; 5] = ["mkv", "mp4", "avi", "mov", "webm"];
-    Path::new(name)
+const VIDEO_EXTENSIONS: &[&str] = &["mkv", "mp4", "avi", "mov", "webm", "m4v", "ts", "m2ts"];
+
+fn is_video(path: &str) -> bool {
+    Path::new(path)
         .extension()
-        .and_then(|e| e.to_str())
-        .map(|e| VIDEO_EXTS.iter().any(|v| e.eq_ignore_ascii_case(v)))
-        .unwrap_or(false)
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| {
+            VIDEO_EXTENSIONS
+                .iter()
+                .any(|video_ext| ext.eq_ignore_ascii_case(video_ext))
+        })
 }
 
 fn filter_torrents(query: &str, torrents: &[Torrent]) -> Vec<Torrent> {

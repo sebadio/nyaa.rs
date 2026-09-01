@@ -1,4 +1,5 @@
 use crate::config::Config;
+use crate::nyaa_app::NyaaMessage::AddToast;
 use crate::ui::main_view;
 use crate::ui::settings::{self, Settings};
 use crate::ui::widgets::modals::{self, download, modal};
@@ -259,6 +260,12 @@ impl NyaaAppState {
                 match downloads.update(downloads_message, &self.qbt_client) {
                     downloads::Action::None => Task::none(),
                     downloads::Action::Task(task) => task.map(NyaaMessage::Downloads),
+                    downloads::Action::ShowError(err) => Task::done(AddToast(
+                        Toast::new()
+                            .set_kind(ToastKind::Error)
+                            .set_message(err)
+                            .set_title("Error"),
+                    )),
                     downloads::Action::OpenPath(path) => {
                         if let Err(e) = open::that_detached(path) {
                             let toast = Toast::new()
@@ -463,10 +470,10 @@ impl NyaaAppState {
 
     pub(crate) fn subscription(&self) -> Subscription<NyaaMessage> {
         let mut suscriptions = vec![time::every(Duration::from_secs(1)).map(|_| NyaaMessage::Tick)];
-
+        // FIX -> Maybe I can do something like "self.current_view.tick() and push it to the suscription?"
         if matches!(self.current_view, NyaaView::Downloads(_)) && self.qbt_client.is_logged_in() {
             suscriptions.push(
-                time::every(Duration::from_secs(2))
+                time::every(Duration::from_secs(1))
                     .map(|_| NyaaMessage::Downloads(downloads::DownloadsMessage::Load)),
             );
         }

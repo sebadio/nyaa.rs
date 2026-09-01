@@ -1,3 +1,4 @@
+pub(crate) mod download_item;
 pub(crate) mod modals;
 pub(crate) mod sidebar;
 pub(crate) mod status_bar;

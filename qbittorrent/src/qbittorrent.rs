@@ -266,19 +266,19 @@ impl Client {
             .await?)
     }
 
-    pub async fn get_torrent_by_hash(&self, hash: impl Into<String>) -> Result<Torrent, Error> {
-        let hash = hash.into();
+    pub async fn get_torrents_by_hashes(
+        &self,
+        hashes: &Vec<String>,
+    ) -> Result<Vec<Torrent>, Error> {
+        let joined_hashes = hashes.join("|");
 
         let torrents = self
-            .get("/api/v2/torrents/info", Some(&[("hashes", &hash)]))
+            .get("/api/v2/torrents/info", Some(&[("hashes", &joined_hashes)]))
             .await?
             .json::<Vec<Torrent>>()
             .await?;
 
-        match torrents.first() {
-            Some(t) => Ok(t.to_owned()),
-            None => Err(Error::TorrentNotFound(hash)),
-        }
+        Ok(torrents)
     }
 
     pub async fn queue_torrent(

@@ -1,9 +1,9 @@
 use crate::appearance::{self, tokens};
 use crate::ui::widgets::download_item::download_item;
+use crate::ui::widgets::modals::delete_torrent;
 use iced::Length::Fill;
 use iced::widget::scrollable::Scrollbar;
-use iced::widget::text::Wrapping;
-use iced::widget::{button, column, row, scrollable, text, text_input};
+use iced::widget::{button, column, row, scrollable, text_input};
 use iced::{Element, Task, alignment};
 use iced_fonts::lucide::refresh_cw;
 use qbittorrent::{self, Client, Torrent};
@@ -19,21 +19,25 @@ pub(crate) enum DownloadsMessage {
     QueryChanged(String),
     Load,
     Loaded(Result<Vec<Torrent>, qbittorrent::Error>),
-    TorrentPressed(String),
+    TorrentPressed(Torrent),
+
     PauseTorrent(String),
     ResumeTorrent(String),
     RemoveTorrent(String),
+    ConfirmRemoveTorrent(delete_torrent::Options),
 
     PauseResult(Result<(), qbittorrent::Error>),
     ResumeResult(Result<(), qbittorrent::Error>),
-    RemoveResult(Result<(), qbittorrent::Error>),
+    RemoveResult(Result<String, qbittorrent::Error>),
 }
 
 pub(crate) enum Action {
     None,
     Task(Task<DownloadsMessage>),
     ShowError(String),
-    OpenPath(String),
+    OpenTorrent(Torrent),
+    OpenDeleteTorrent(String),
+    TorrentRemoved(String),
 }
 
 impl Downloads {
@@ -46,9 +50,10 @@ impl Downloads {
 
     pub fn update(&mut self, message: DownloadsMessage, client: &Client) -> Action {
         match message {
-            DownloadsMessage::PauseResult(Ok(_))
-            | DownloadsMessage::RemoveResult(Ok(_))
-            | DownloadsMessage::ResumeResult(Ok(_)) => Action::None,
+            DownloadsMessage::PauseResult(Ok(_)) | DownloadsMessage::ResumeResult(Ok(_)) => {
+                Action::None
+            }
+            DownloadsMessage::RemoveResult(Ok(hash)) => Action::TorrentRemoved(hash),
 
             DownloadsMessage::PauseResult(Err(e))
             | DownloadsMessage::RemoveResult(Err(e))
@@ -62,21 +67,31 @@ impl Downloads {
                     DownloadsMessage::PauseResult,
                 ))
             }
+
             DownloadsMessage::ResumeTorrent(hash) => {
                 log::info!("Resumed {}", hash);
                 let qbt = client.clone();
                 Action::Task(Task::perform(
                     async move { qbt.resume_torrent(&hash).await },
-                    DownloadsMessage::PauseResult,
+                    DownloadsMessage::ResumeResult,
                 ))
             }
-            DownloadsMessage::RemoveTorrent(hash) => {
-                // FIX: Ask the user in a modal if they are sure
-                log::info!("Removed {}", hash);
+
+            DownloadsMessage::RemoveTorrent(hash) => Action::OpenDeleteTorrent(hash),
+
+            DownloadsMessage::ConfirmRemoveTorrent(options) => {
+                let hash = options.hash;
+                let delete_files = options.delete_files;
+
+                log::info!("Removing {} (delete files: {})", hash, delete_files);
                 let qbt = client.clone();
                 Action::Task(Task::perform(
-                    async move { qbt.remove_torrent(&hash, true).await }, // FIX : Maybe ask the user if they want to delete the files
-                    DownloadsMessage::PauseResult,
+                    async move {
+                        qbt.remove_torrent(&hash, delete_files)
+                            .await
+                            .map(|_| hash.clone())
+                    },
+                    DownloadsMessage::RemoveResult,
                 ))
             }
 
@@ -84,6 +99,7 @@ impl Downloads {
                 self.query = q;
                 Action::None
             }
+
             DownloadsMessage::Load => {
                 let qbt = client.clone();
                 Action::Task(Task::perform(
@@ -91,20 +107,18 @@ impl Downloads {
                     DownloadsMessage::Loaded,
                 ))
             }
+
             DownloadsMessage::Loaded(Ok(list)) => {
                 self.torrents = list;
                 Action::None
             }
+
             DownloadsMessage::Loaded(Err(e)) => {
                 log::error!("qbt: {e:?}");
                 Action::ShowError(e.to_string())
             }
-            DownloadsMessage::TorrentPressed(hash) => {
-                match self.torrents.iter().find(|t| t.hash == hash) {
-                    Some(t) => Action::OpenPath(t.content_path.clone()),
-                    None => Action::None,
-                }
-            }
+
+            DownloadsMessage::TorrentPressed(torrent) => Action::OpenTorrent(torrent),
         }
     }
 
@@ -152,15 +166,6 @@ impl Downloads {
         .spacing(tokens::SPACING_LARGE)
         .into()
     }
-}
-
-fn table_button(torrent: Torrent) -> Element<'static, DownloadsMessage> {
-    let hash = torrent.hash.clone();
-    button(text(torrent.name).wrapping(Wrapping::WordOrGlyph))
-        .style(appearance::button::title_link)
-        .width(Fill)
-        .on_press(DownloadsMessage::TorrentPressed(hash))
-        .into()
 }
 
 fn normalize(s: &str) -> String {

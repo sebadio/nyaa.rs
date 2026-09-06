@@ -2,11 +2,10 @@ use crate::config::Config;
 use crate::nyaa_app::NyaaMessage::AddToast;
 use crate::ui::main_view;
 use crate::ui::settings::{self, Settings};
-use crate::ui::widgets::modals::{self, download, modal};
+use crate::ui::widgets::modals::{self, delete_torrent, download, modal};
 use crate::ui::widgets::{Toast, ToastId, ToastKind, sidebar, status_bar, titlebar};
 use crate::ui::{Downloads, downloads};
 use crate::ui::{Search, search};
-use crate::util::track_torrent;
 use iced::Length::Fill;
 use iced::time::Instant;
 use iced::time::{self, Duration};
@@ -16,8 +15,8 @@ use log::{error, info};
 use nyaa::NyaaAdapter;
 use nyaa::NyaaAdapterError;
 use nyaa::adapter::NyaaItemBytes;
-use qbittorrent::{self, Client, Torrent, TorrentPostResponse};
-use std::io::ErrorKind;
+use qbittorrent::{self, Client, Torrent};
+use std::collections::HashMap;
 
 pub(crate) enum NyaaView {
     NyaaSearch(Search),
@@ -55,36 +54,48 @@ pub(crate) enum NyaaMessage {
     Minimize,
     Drag,
     ToggleSidebar,
+
     Tick,
     AnimationTick,
+    TrackerTick,
     Navigate(ScreenKind),
+
     Search(search::NyaaSearchMessage),
     Downloads(downloads::DownloadsMessage),
     Settings(settings::SettingsMessage),
-    TorrentQueued(TorrentPostResponse),
+
     DismissToast(ToastId),
     AddToast(Toast),
+    Modal(modals::Message),
+
+    TorrentQueued {
+        hash: String,
+        name: String,
+        open_on_finish: bool,
+    },
     TorrentAddFailed {
         error: qbittorrent::Error,
         original_hash: String,
     },
-    DownloadProgress {
-        name: String,
-        progress: f32,
-    },
-    DownloadFinished(Result<Torrent, qbittorrent::Error>),
+    TorrentsTracked(Result<Vec<Torrent>, qbittorrent::Error>),
     TorrentDownloaded {
         options: download::Options,
         result: Result<NyaaItemBytes, NyaaAdapterError>,
     },
-    Modal(modals::Message),
+
+    OpenTorrent(Torrent),
+    OpenTorrentByHash(String),
 }
 
-#[derive(Debug, Clone)]
+const MISSING_POLLS_BEFORE_REMOVAL: u8 = 3;
+
+#[derive(Debug, Default, Clone)]
 pub(crate) struct ActiveDownload {
     pub name: String,
     pub progress: f32,
+    pub hash: String,
     pub open_on_finish: bool,
+    pub missing_polls: u8,
 }
 
 pub(crate) struct NyaaAppState {
@@ -92,7 +103,8 @@ pub(crate) struct NyaaAppState {
     qbt_client: Client,
     nyaa_adapter: NyaaAdapter,
     config: Config,
-    active_download: Option<ActiveDownload>,
+    active_downloads: Vec<ActiveDownload>,
+    tracking_request_in_flight: bool,
     active_modal: Option<modals::Modal>,
     notifications: Vec<Toast>,
     sidebar_animation: Animation<bool>,
@@ -115,10 +127,11 @@ impl NyaaAppState {
             qbt_client,
             nyaa_adapter,
             config,
-            active_download: None,
+            active_downloads: Vec::new(),
             active_modal: None,
             notifications: Vec::new(),
             sidebar_animation: Animation::new(true).very_quick(),
+            tracking_request_in_flight: false,
         }
     }
 
@@ -127,7 +140,7 @@ impl NyaaAppState {
             self.config.uses_custom_titlebar.then(titlebar),
             column![row![
                 sidebar(&self.sidebar_animation, self.current_view.kind()),
-                column![main_view(self), status_bar(self.active_download.clone())].width(Fill)
+                column![main_view(self), status_bar(&self.active_downloads)].width(Fill)
             ],]
             .height(Fill),
         ];
@@ -158,6 +171,26 @@ impl NyaaAppState {
                 self.notifications
                     .retain(|t| now.duration_since(t.created_at) < t.lifetime());
                 Task::none()
+            }
+
+            NyaaMessage::TrackerTick => {
+                if self.active_downloads.is_empty() || self.tracking_request_in_flight {
+                    return Task::none();
+                }
+
+                let hashes = self
+                    .active_downloads
+                    .iter()
+                    .map(|download| download.hash.clone())
+                    .collect::<Vec<_>>();
+
+                let client = self.qbt_client.clone();
+                self.tracking_request_in_flight = true;
+
+                Task::perform(
+                    async move { client.get_torrents_by_hashes(&hashes).await },
+                    NyaaMessage::TorrentsTracked,
+                )
             }
 
             NyaaMessage::AnimationTick => Task::none(),
@@ -193,6 +226,12 @@ impl NyaaAppState {
 
                         modals::Event::PostModalCancel => {
                             self.active_modal = None;
+                        }
+                        modals::Event::PostDeleteTorrentSubmit(options) => {
+                            self.active_modal = None;
+                            return Task::done(NyaaMessage::Downloads(
+                                downloads::DownloadsMessage::ConfirmRemoveTorrent(options),
+                            ));
                         }
                         modals::Event::PostDownloadSubmit(options) => {
                             let Some(modals::Modal::Download(modal)) = self.active_modal.take()
@@ -266,25 +305,18 @@ impl NyaaAppState {
                             .set_message(err)
                             .set_title("Error"),
                     )),
-                    downloads::Action::OpenPath(path) => {
-                        if let Err(e) = open::that_detached(path) {
-                            let toast = Toast::new()
-                                .set_title("Failed to open")
-                                .set_kind(ToastKind::Error);
-
-                            let toast = match e.kind() {
-                                ErrorKind::NotFound => {
-                                    error!("File doesn't exist");
-                                    toast.set_message("Does the file exist?")
-                                }
-                                _ => {
-                                    error!("{}", e.kind());
-                                    toast.set_message(format!("{}", e.kind()))
-                                }
-                            };
-
-                            return Task::done(NyaaMessage::AddToast(toast));
-                        }
+                    downloads::Action::TorrentRemoved(hash) => {
+                        self.active_downloads
+                            .retain(|download| download.hash.ne(&hash));
+                        Task::none()
+                    }
+                    downloads::Action::OpenTorrent(torrent) => {
+                        Task::done(NyaaMessage::OpenTorrent(torrent))
+                    }
+                    downloads::Action::OpenDeleteTorrent(hash) => {
+                        self.active_modal = Some(modals::Modal::DeleteTorrent(
+                            delete_torrent::Modal::new(hash),
+                        ));
                         Task::none()
                     }
                 }
@@ -318,28 +350,32 @@ impl NyaaAppState {
             NyaaMessage::TorrentDownloaded { options, result } => match result {
                 Ok(nyaa_combo) => {
                     let title = nyaa_combo.item.title.clone();
-                    self.active_download = Some(ActiveDownload {
-                        name: nyaa_combo.item.title,
-                        progress: 0.0,
-                        open_on_finish: options.open_on_finish,
-                    });
+                    let original_hash = nyaa_combo.item.info_hash;
+
+                    let toast = Toast::new()
+                        .set_title("Starting Download")
+                        .set_message(title.clone())
+                        .set_kind(ToastKind::Info);
 
                     let client = self.qbt_client.clone();
                     let queue_task = Task::perform(
                         async move { client.queue_torrent(nyaa_combo.bytes).await },
                         move |result| match result {
-                            Ok(post) => NyaaMessage::TorrentQueued(post),
+                            Ok(post) => NyaaMessage::TorrentQueued {
+                                hash: post
+                                    .added_torrent_ids
+                                    .first()
+                                    .expect("queue_torrent guarantees a non empty list")
+                                    .clone(),
+                                name: title,
+                                open_on_finish: options.open_on_finish,
+                            },
                             Err(error) => NyaaMessage::TorrentAddFailed {
                                 error,
-                                original_hash: nyaa_combo.item.info_hash,
+                                original_hash: original_hash,
                             },
                         },
                     );
-
-                    let toast = Toast::new()
-                        .set_title("Starting Download")
-                        .set_message(title)
-                        .set_kind(ToastKind::Info);
 
                     Task::batch([Task::done(NyaaMessage::AddToast(toast)), queue_task])
                 }
@@ -354,18 +390,20 @@ impl NyaaAppState {
                 }
             },
 
-            NyaaMessage::TorrentQueued(res) => {
-                let hash = res
-                    .added_torrent_ids
-                    .first()
-                    .expect("queue_torrent guarantees a non empty list")
-                    .to_string();
+            NyaaMessage::TorrentQueued {
+                hash,
+                name,
+                open_on_finish,
+            } => {
+                self.active_downloads.push(ActiveDownload {
+                    hash,
+                    name,
+                    progress: 0.0,
+                    open_on_finish,
+                    ..Default::default()
+                });
 
-                Task::sip(
-                    track_torrent(&self.qbt_client, hash),
-                    |(name, progress)| NyaaMessage::DownloadProgress { name, progress },
-                    NyaaMessage::DownloadFinished,
-                )
+                Task::none()
             }
 
             NyaaMessage::TorrentAddFailed {
@@ -373,25 +411,22 @@ impl NyaaAppState {
                 original_hash,
             } => match error {
                 qbittorrent::Error::AlreadyExists() => {
-                    let msg = "Torrent already in qBittorrent - tracking existing one".to_string();
+                    let msg = "Torrent already in qBittorrent".to_string();
                     info!("{}", msg);
 
                     let toast = Toast::new()
-                        .set_title("Tracking existing torrent")
+                        .set_title("Not tracking existing torrent")
                         .set_message(msg)
                         .set_kind(ToastKind::Info);
 
-                    let sip_task = Task::sip(
-                        track_torrent(&self.qbt_client, original_hash),
-                        |(name, progress)| NyaaMessage::DownloadProgress { name, progress },
-                        NyaaMessage::DownloadFinished,
-                    );
-
-                    Task::batch([Task::done(NyaaMessage::AddToast(toast)), sip_task])
+                    Task::batch([
+                        Task::done(NyaaMessage::AddToast(toast)),
+                        Task::done(NyaaMessage::OpenTorrentByHash(original_hash)),
+                    ])
                 }
                 other => {
                     error!("queue failed: {other}");
-                    self.active_download = None;
+
                     Task::done(NyaaMessage::AddToast(Toast {
                         title: "Error".to_string(),
                         message: format!("Failed to queue requested torrent: {}", other),
@@ -401,34 +436,82 @@ impl NyaaAppState {
                 }
             },
 
-            NyaaMessage::DownloadProgress { name, progress } => {
-                if let Some(dl) = &mut self.active_download {
-                    dl.name = name;
-                    dl.progress = progress;
+            NyaaMessage::TorrentsTracked(Ok(torrents)) => {
+                self.tracking_request_in_flight = false;
+                let torrents_by_hash: HashMap<_, _> = torrents
+                    .into_iter()
+                    .map(|torrent| (torrent.hash.clone(), torrent))
+                    .collect();
+
+                let mut tasks = Vec::new();
+                self.active_downloads.retain_mut(|download| {
+                    let Some(torrent) = torrents_by_hash.get(&download.hash) else {
+                        download.missing_polls = download.missing_polls.saturating_add(1);
+                        return download.missing_polls < MISSING_POLLS_BEFORE_REMOVAL;
+                    };
+                    download.missing_polls = 0;
+                    download.name = torrent.name.clone();
+                    download.progress = torrent.progress;
+                    if torrent.is_complete() {
+                        if download.open_on_finish {
+                            tasks.push(Task::done(NyaaMessage::OpenTorrent(torrent.clone())));
+                        }
+                        false
+                    } else {
+                        true
+                    }
+                });
+                Task::batch(tasks)
+            }
+
+            NyaaMessage::TorrentsTracked(Err(error)) => {
+                error!("tracking failed: {error}");
+                self.tracking_request_in_flight = false;
+
+                return Task::done(NyaaMessage::AddToast(
+                    Toast::new()
+                        .set_title("Error tracking")
+                        .set_message(error.to_string())
+                        .set_kind(ToastKind::Error),
+                ));
+            }
+
+            NyaaMessage::OpenTorrent(torrent) => {
+                if let Err(e) = open::that_detached(&torrent.content_path) {
+                    error!("open failed: {e}");
+                    return Task::done(NyaaMessage::AddToast(
+                        Toast::new()
+                            .set_kind(ToastKind::Error)
+                            .set_title("Error opening file")
+                            .set_message(e.to_string()),
+                    ));
                 }
                 Task::none()
             }
 
-            NyaaMessage::DownloadFinished(res) => {
-                let dl = self.active_download.take();
-                match (res, dl) {
-                    (Ok(torrent), Some(dl)) if dl.open_on_finish => {
-                        if let Err(e) = open::that_detached(&torrent.content_path) {
-                            error!("open failed: {e}");
+            NyaaMessage::OpenTorrentByHash(hash) => {
+                let qbt = self.qbt_client.clone();
+                let hashes = vec![hash];
+
+                Task::perform(
+                    async move { qbt.get_torrents_by_hashes(&hashes).await },
+                    |res| match res {
+                        Ok(res) => match res.first() {
+                            Some(torrent) => NyaaMessage::OpenTorrent(torrent.clone()),
+                            None => NyaaMessage::Tick,
+                        },
+                        Err(e) => {
+                            error!("{}", e);
+
+                            NyaaMessage::AddToast(
+                                Toast::new()
+                                    .set_title("Error opening file")
+                                    .set_message(e.to_string())
+                                    .set_kind(ToastKind::Error),
+                            )
                         }
-                    }
-                    (Ok(_), _) => {}
-                    (Err(e), _) => {
-                        error!("tracking failed: {e}");
-                        return Task::done(NyaaMessage::AddToast(Toast {
-                            title: "Error tracking".to_string(),
-                            message: format!("Tracking failed for torrent {}", e),
-                            kind: ToastKind::Error,
-                            ..Toast::default()
-                        }));
-                    }
-                }
-                Task::none()
+                    },
+                )
             }
         }
     }
@@ -480,6 +563,11 @@ impl NyaaAppState {
 
         if self.sidebar_animation.is_animating(Instant::now()) {
             suscriptions.push(window::frames().map(|_| NyaaMessage::AnimationTick));
+        }
+
+        if !self.active_downloads.is_empty() && !self.tracking_request_in_flight {
+            suscriptions
+                .push(time::every(Duration::from_secs(1)).map(|_| NyaaMessage::TrackerTick));
         }
 
         Subscription::batch(suscriptions)

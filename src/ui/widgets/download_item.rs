@@ -32,7 +32,7 @@ pub(crate) fn download_item(torrent: &Torrent) -> Element<'static, DownloadsMess
     };
 
     let open_action = match torrent.is_complete() {
-        true => Some(DownloadsMessage::TorrentPressed(torrent.hash.clone())),
+        true => Some(DownloadsMessage::TorrentPressed(torrent.clone())),
         false => None,
     };
 

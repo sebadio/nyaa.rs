@@ -56,6 +56,20 @@ pub fn secondary_action(theme: &Theme, status: Status) -> button::Style {
     style
 }
 
+pub(crate) fn hover_only(theme: &Theme, status: Status) -> button::Style {
+    let palette = theme.palette();
+
+    let mut style = button::text(theme, status);
+    style.background = None;
+    style.text_color = match status {
+        Status::Hovered => palette.primary.strong.color,
+        Status::Pressed => palette.danger.strong.color,
+        _ => palette.background.base.text,
+    };
+
+    style
+}
+
 pub fn title_link(theme: &Theme, status: Status) -> button::Style {
     let palette = theme.palette();
 

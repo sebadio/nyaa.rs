@@ -1,13 +1,14 @@
 use crate::appearance::{self, tokens};
+use crate::ui::widgets::{Field, modals};
 use iced::Length::Fill;
 use iced::alignment::Vertical::Center;
 use iced::widget::{
-    button, center, column, container, pick_list, row, scrollable, space, table, text, text_input,
-    tooltip,
+    button, center, column, container, pick_list, row, scrollable, space, table, text, tooltip,
 };
 use iced::{Element, Task, alignment};
 use iced_fonts::lucide::{arrow_down, arrow_up, download, search};
 use log::{error, info};
+use nyaa::adapter::NyaaItemBytes;
 use nyaa::filter::NyaaFilter;
 use nyaa::request::NyaaRequest;
 use nyaa::{NyaaAdapter, NyaaAdapterError, NyaaCategory, NyaaItem};
@@ -18,26 +19,37 @@ pub(crate) enum Action {
     Task(Task<NyaaSearchMessage>),
     OpenPostDownload(NyaaItem),
     ShowError(SearchViewError),
+    QueueTorrent(NyaaItemBytes, modals::download::Options),
 }
 
 #[derive(Debug, Clone)]
 pub(crate) enum NyaaSearchMessage {
     Search,
     QueryUpdated(String),
+    ClearSearchQuery,
     CategoryUpdated(NyaaCategory),
     FilterUpdated(NyaaFilter),
     SearchResults(Result<Vec<NyaaItem>, NyaaAdapterError>),
-    DownloadTorrent(NyaaItem),
+    DownloadTorrentModalOpener(NyaaItem),
+    DownloadTorrent(NyaaItem, modals::download::Options),
+    DownloadResult(
+        Result<NyaaItemBytes, NyaaAdapterError>,
+        modals::download::Options,
+    ),
 }
 
 #[derive(Debug, Clone, Error)]
 pub(crate) enum SearchViewError {
     #[error("Search failed: {0}")]
     FailedSearch(String),
+
+    #[error("Failed Download: {0}")]
+    FailedDownload(String),
 }
 
 #[derive(Debug)]
 pub(crate) struct Search {
+    nyaa_client: NyaaAdapter,
     query: String,
     category: NyaaCategory,
     filter: NyaaFilter,
@@ -48,7 +60,10 @@ pub(crate) struct Search {
 
 impl Search {
     pub(crate) fn new() -> Self {
+        let nyaa_adapter = NyaaAdapter::new().expect("Nyaa adapter should not fail");
+
         Self {
+            nyaa_client: nyaa_adapter,
             query: String::new(),
             category: NyaaCategory::default(),
             results: Vec::new(),
@@ -71,21 +86,22 @@ impl Search {
             .into()
     }
 
-    pub(crate) fn update(
-        &mut self,
-        message: NyaaSearchMessage,
-        nyaa_client: &NyaaAdapter,
-    ) -> Action {
+    pub(crate) fn update(&mut self, message: NyaaSearchMessage) -> Action {
         match message {
             NyaaSearchMessage::QueryUpdated(query) => {
                 self.query = query;
                 Action::None
             }
 
+            NyaaSearchMessage::ClearSearchQuery => {
+                self.query = String::new();
+                Action::None
+            }
+
             NyaaSearchMessage::Search => {
                 info!("Triggered search");
                 self.is_loading = true;
-                let client = nyaa_client.clone();
+                let client = self.nyaa_client.clone();
                 let request = NyaaRequest::new(&self.query)
                     .set_category(self.category)
                     .set_filter(self.filter);
@@ -128,7 +144,24 @@ impl Search {
                 )))
             }
 
-            NyaaSearchMessage::DownloadTorrent(item) => Action::OpenPostDownload(item),
+            NyaaSearchMessage::DownloadTorrentModalOpener(item) => Action::OpenPostDownload(item),
+
+            NyaaSearchMessage::DownloadTorrent(item, options) => {
+                let client = self.nyaa_client.clone();
+
+                Action::Task(Task::perform(
+                    async move { client.download_torrent(item).await },
+                    move |result| NyaaSearchMessage::DownloadResult(result, options),
+                ))
+            }
+
+            NyaaSearchMessage::DownloadResult(Ok(nyaa_bytes), options) => {
+                Action::QueueTorrent(nyaa_bytes, options)
+            }
+
+            NyaaSearchMessage::DownloadResult(Err(e), _) => {
+                Action::ShowError(SearchViewError::FailedDownload(e.to_string()))
+            }
         }
     }
 }
@@ -183,30 +216,24 @@ fn empty_search_content(has_searched: bool) -> Element<'static, NyaaSearchMessag
 }
 
 fn search_row(state: &Search) -> Element<'_, NyaaSearchMessage> {
-    let mut txt_inp = text_input("Let's search nyaa!", &state.query)
-        .padding(tokens::INPUT_PADDING)
-        .line_height(tokens::INPUT_LINE_HEIGHT)
-        .size(tokens::INPUT_SIZE)
-        .align_x(alignment::Horizontal::Center)
-        .width(Fill)
-        .style(appearance::text_input::primary);
+    let search_field = Field::new("Let's search nyaa!", &state.query)
+        .on_input(NyaaSearchMessage::QueryUpdated)
+        .on_submit(NyaaSearchMessage::Search)
+        .on_clear(NyaaSearchMessage::ClearSearchQuery)
+        .enabled(!state.is_loading)
+        .build();
 
-    let mut btn = button(center(search()))
+    let mut search_button = button(center(search()))
         .width(tokens::BUTTON_SIZE)
         .height(tokens::BUTTON_SIZE)
         .padding(tokens::BTN_PADDING)
         .style(appearance::button::secondary);
 
     if !state.is_loading {
-        txt_inp = txt_inp
-            .on_submit(NyaaSearchMessage::Search)
-            .on_input(NyaaSearchMessage::QueryUpdated);
-
-        btn = btn.on_press(NyaaSearchMessage::Search);
+        search_button = search_button.on_press(NyaaSearchMessage::Search);
     }
 
-    let input_and_button = row![txt_inp, btn]
-        .height(tokens::BUTTON_SIZE)
+    let input_and_button = row![search_field, search_button]
         .align_y(Center)
         .spacing(tokens::SPACING_BASE)
         .width(Fill);
@@ -251,7 +278,7 @@ fn item_size_info(item: &NyaaItem) -> Element<'static, NyaaSearchMessage> {
 fn item_download_button(item: &NyaaItem) -> Element<'static, NyaaSearchMessage> {
     container(
         button(download().size(14))
-            .on_press(NyaaSearchMessage::DownloadTorrent(item.clone()))
+            .on_press(NyaaSearchMessage::DownloadTorrentModalOpener(item.clone()))
             .style(appearance::button::secondary_action),
     )
     .align_y(alignment::Vertical::Center)
@@ -271,7 +298,7 @@ fn item_title(item: &NyaaItem) -> Element<'static, NyaaSearchMessage> {
         )
         .padding(tokens::PADDING_NONE)
         .style(appearance::button::title_link)
-        .on_press(NyaaSearchMessage::DownloadTorrent(item.clone()))
+        .on_press(NyaaSearchMessage::DownloadTorrentModalOpener(item.clone()))
         .width(Fill),
         container(text(item.title.clone()).size(14))
             .width(tokens::TOOLTIP_WIDTH)

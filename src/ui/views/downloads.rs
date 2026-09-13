@@ -1,10 +1,11 @@
 use crate::appearance::{self, tokens};
+use crate::ui::widgets::Field;
 use crate::ui::widgets::download_item::download_item;
 use crate::ui::widgets::modals::delete_torrent;
 use iced::Length::Fill;
 use iced::widget::scrollable::Scrollbar;
-use iced::widget::{button, column, row, scrollable, text_input};
-use iced::{Element, Task, alignment};
+use iced::widget::{button, column, row, scrollable};
+use iced::{Element, Task};
 use iced_fonts::lucide::refresh_cw;
 use qbittorrent::{self, Client, Torrent};
 use std::path::Path;
@@ -16,10 +17,11 @@ pub(crate) struct Downloads {
 
 #[derive(Debug, Clone)]
 pub(crate) enum DownloadsMessage {
-    QueryChanged(String),
     Load,
     Loaded(Result<Vec<Torrent>, qbittorrent::Error>),
     TorrentPressed(Torrent),
+    QueryChanged(String),
+    ClearQuery,
 
     PauseTorrent(String),
     ResumeTorrent(String),
@@ -100,6 +102,11 @@ impl Downloads {
                 Action::None
             }
 
+            DownloadsMessage::ClearQuery => {
+                self.query = String::new();
+                Action::None
+            }
+
             DownloadsMessage::Load => {
                 let qbt = client.clone();
                 Action::Task(Task::perform(
@@ -125,15 +132,13 @@ impl Downloads {
     pub(crate) fn view(&self) -> Element<'_, DownloadsMessage> {
         let filtered_torrents = filter_torrents(&self.query, &self.torrents);
 
+        let search_field = Field::new("Search for downloaded torrents here", &self.query)
+            .on_input(DownloadsMessage::QueryChanged)
+            .on_clear(DownloadsMessage::ClearQuery)
+            .build();
+
         let header_search = row![
-            text_input("Search for downloaded torrents here", &self.query)
-                .on_input(DownloadsMessage::QueryChanged)
-                .size(tokens::INPUT_SIZE)
-                .line_height(tokens::INPUT_LINE_HEIGHT)
-                .padding(tokens::INPUT_PADDING)
-                .style(appearance::text_input::primary)
-                .align_x(alignment::Horizontal::Center)
-                .width(Fill),
+            search_field,
             button(
                 refresh_cw()
                     .align_x(iced::Alignment::Center)
